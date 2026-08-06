@@ -1,0 +1,15 @@
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+
+	# Si el recurso pedido es un archivo o carpeta que existe
+	# (por ejemplo /assets/css/app.css o /uploads/...), servirlo directo.
+	RewriteCond %{REQUEST_FILENAME} -f [OR]
+	RewriteCond %{REQUEST_FILENAME} -d
+	RewriteRule ^ - [L]
+
+	# Cualquier otra cosa, al front controller.
+	RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Evitar el listado de directorios.
+Options -Indexes

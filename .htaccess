@@ -1,0 +1,16 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # No reenviar si el recurso pedido ya existe fisicamente en la raiz
+    # (evita interferir con archivos reales que pudieras poner arriba).
+    RewriteCond %{REQUEST_URI} !^/public/
+
+    # Reenviar internamente TODA la peticion hacia la carpeta public/.
+    # La barra inicial y final de $1 se manejan para que funcione tanto en
+    # la raiz del dominio como en una subcarpeta (localhost/loquesea/).
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Seguridad: impedir que se listen los archivos de la carpeta si faltara
+# un index (defensa en profundidad).
+Options -Indexes

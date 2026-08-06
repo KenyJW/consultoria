@@ -1,0 +1,22 @@
+-- ============================================================
+-- Fase 5 y 6 – Notas de migración
+-- ============================================================
+-- No se requieren cambios de esquema adicionales.
+-- Las columnas maturity_score y risk_score ya existen en audits.
+-- La lógica de cálculo está en app/core/MaturityCalculator.php
+--
+-- Resumen de lo implementado:
+--
+-- FASE 5 – Cálculo de Madurez y Riesgo
+--   - MaturityCalculator::calculate(responses[])
+--     · Madurez ponderada por pregunta → control → dominio → global
+--     · Riesgo por control usando triada CID (confidentiality/integrity/availability)
+--     · Riesgo global normalizado 0-100%
+--   - Se ejecuta automáticamente al cerrar una auditoría (AuditController::save mode=final)
+--
+-- FASE 6 – Visualización
+--   - Dashboard: KPIs, heatmap de madurez por dominio, gráfico Chart.js, tabla de últimas auditorías
+--   - Reporte imprimible: GET /audits/report?id={id}
+--     · Datos generales, scores globales, madurez por dominio, detalle completo del cuestionario
+--     · Imprimible como PDF desde el navegador (Ctrl+P / window.print())
+-- ============================================================

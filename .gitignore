@@ -1,0 +1,43 @@
+# ============================================================
+#  .gitignore — Proyecto Consultora (PHP MVC)
+# ============================================================
+
+# --- Evidencias subidas durante las pruebas (NO deben ir al repo) ---
+# Se ignora el contenido pero se conserva la carpeta con un .gitkeep.
+public/uploads/evidences/*
+!public/uploads/evidences/.gitkeep
+
+# --- Archivos de configuracion con credenciales locales ---
+# Si en algun momento creas una copia local con tu password real,
+# nombrala .local y no se subira.
+config/database.local.php
+.env
+.env.local
+
+# --- Dependencias (si mas adelante usas Composer) ---
+/vendor/
+
+# --- Logs y temporales ---
+*.log
+error_log
+error_log.txt
+/tmp/
+*.tmp
+
+# --- Archivos del sistema operativo ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Archivos de editores / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Respaldos de base de datos que no quieras versionar ---
+# (Si quieres compartir los .sql del proyecto, dejalos FUERA de esta regla.
+#  Esta linea ignora dumps con fecha tipo backup_2026-08-05.sql)
+backup_*.sql
+dump_*.sql
