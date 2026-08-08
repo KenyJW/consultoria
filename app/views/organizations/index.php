@@ -1,7 +1,7 @@
 <?php use App\Core\Csrf; ?>
 <form class="row g-2 mb-3" method="get" action="<?= BASE_URL ?>/organizations">
     <div class="col-md-7">
-        <input class="form-control" name="q" value="<?= e($search) ?>" placeholder="Buscar por nombre, correo o direcciÃ³n">
+        <input class="form-control" name="q" value="<?= e($search) ?>" placeholder="Buscar por nombre, correo o dirección">
     </div>
     <div class="col-md-2">
         <select class="form-select" name="sort">
@@ -22,7 +22,7 @@
     </div>
 </form>
 <div class="d-flex justify-content-end mb-3">
-    <a class="btn btn-primary" href="<?= BASE_URL ?>/organizations/create">Nueva organizaciÃ³n</a>
+    <a class="btn btn-primary" href="<?= BASE_URL ?>/organizations/create">Nueva organización</a>
 </div>
 <div class="card border-0 shadow-sm">
     <div class="card-body">
@@ -32,7 +32,7 @@
                 <tr>
                     <th>Nombre</th>
                     <th>Correo</th>
-                    <th>Ãreas</th>
+                    <th>Áreas</th>
                     <th>Estado</th>
                     <th>Registro</th>
                     <th class="text-end">Acciones</th>
@@ -49,7 +49,7 @@
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-secondary" href="<?= BASE_URL ?>/organizations/show?id=<?= (int) $organization['id'] ?>">Ver</a>
                             <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/organizations/edit?id=<?= (int) $organization['id'] ?>">Editar</a>
-                            <form class="d-inline" method="post" action="<?= BASE_URL ?>/organizations/toggle" data-confirm="Â¿Cambiar estado de esta organizaciÃ³n?">
+                            <form class="d-inline" method="post" action="<?= BASE_URL ?>/organizations/toggle" data-confirm="¿Cambiar estado de esta organización?">
                                 <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
                                 <input type="hidden" name="id" value="<?= (int) $organization['id'] ?>">
                                 <input type="hidden" name="status" value="<?= $organization['status'] === 'active' ? 'inactive' : 'active' ?>">

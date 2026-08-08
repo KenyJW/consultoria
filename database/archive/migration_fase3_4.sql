@@ -1,3 +1,6 @@
+-- OBSOLETO: ya incorporado en sql/schema.sql (objective/weight/CID en iso_controls).
+-- Se conserva solo como referencia historica, NO importar.
+
 -- ============================================================
 -- Migracion Fase 3 y 4
 -- El esquema base ya define iso_domains, iso_controls, questions,

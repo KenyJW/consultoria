@@ -26,6 +26,11 @@
                     <input class="form-control" id="weight" name="weight" type="number" step="0.01" min="0.1" value="<?= e($_SESSION['_old']['weight'] ?? $control['weight'] ?? '1.00') ?>" required>
                     <div class="form-text">Valor relativo del control (ej. 1.0 = normal, 2.0 = critico).</div>
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="iso_reference">Referencia ISO/IEC 27002:2022</label>
+                    <input class="form-control" id="iso_reference" name="iso_reference" value="<?= e($_SESSION['_old']['iso_reference'] ?? $control['iso_reference'] ?? '') ?>" placeholder="Ej. 8.2 / 8.3">
+                    <div class="form-text">Numeración oficial de la norma en la que se basa este control.</div>
+                </div>
                 <div class="col-md-12">
                     <label class="form-label" for="title">Titulo / nombre del control</label>
                     <input class="form-control" id="title" name="title" value="<?= e($_SESSION['_old']['title'] ?? $control['title'] ?? '') ?>" required>

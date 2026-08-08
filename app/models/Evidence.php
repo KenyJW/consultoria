@@ -55,4 +55,15 @@ final class Evidence extends BaseModel
         $statement = $this->db->prepare('DELETE FROM evidences WHERE id = :id');
         return $statement->execute(['id' => $id]);
     }
+
+    /** audit_id real de una evidencia (via su respuesta), para validar propiedad antes de borrar. */
+    public function auditIdFor(int $evidenceId): ?int
+    {
+        $statement = $this->db->prepare(
+            'SELECT r.audit_id FROM evidences e INNER JOIN responses r ON r.id = e.response_id WHERE e.id = :id LIMIT 1'
+        );
+        $statement->execute(['id' => $evidenceId]);
+        $auditId = $statement->fetchColumn();
+        return $auditId !== false ? (int) $auditId : null;
+    }
 }

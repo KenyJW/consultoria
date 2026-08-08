@@ -3,6 +3,9 @@
 Esta guia es para que cualquier integrante del equipo pueda descargar el proyecto y
 ejecutarlo en su maquina con WAMP, sin importar en que carpeta lo coloque.
 
+> ¿Buscas cómo publicarlo en un hosting real (no solo en tu WAMP local)? Ver
+> [`DEPLOY.md`](DEPLOY.md).
+
 > El proyecto ya esta preparado para ser portable: las rutas de enlaces, CSS, JS y
 > redirecciones se calculan solas. Solo hay que seguir estos pasos.
 
@@ -34,23 +37,26 @@ C:\wamp64\www\consultora\├── .htaccess        <-- (archivo de la raiz, ver
 
 ## Paso 2 — Crear e importar la base de datos
 
+El proyecto trae un **unico archivo** con todo lo necesario: `sql/schema.sql`.
+Ese script crea la base de datos, las tablas (incluyendo `objective`/`weight`/
+`confidentiality`/`integrity`/`availability` en `iso_controls`) y los datos
+semilla (7 dominios, 15 controles con su peso y relacion CID ya definidos,
+y 75 preguntas). No hace falta importar nada mas.
+
 1. Abrir **phpMyAdmin** (icono WAMP → phpMyAdmin, o `http://localhost/phpmyadmin`).
-2. Crear una base de datos llamada exactamente:
-
-```
-consultora_iso27002
-```
-(con cotejamiento `utf8mb4_general_ci`).
-3. Seleccionarla y en la pestaña **Importar**, cargar los scripts EN ESTE ORDEN:
-
-1. `database/schema.sql`
-2. `database/instrumento_iso_seed.sql`      (dominios + controles)
-3. `database/instrumento_iso_75preguntas.sql`  (las 75 preguntas)
-4. `database/update_pesos_cid_controles.sql`  (actualiza `weight` y flags `confidentiality|integrity|availability` para los controles C1–C15)
+2. Ir a la pestaña **SQL** (a nivel de servidor, sin seleccionar ninguna base
+   primero) o a **Importar**, y cargar `sql/schema.sql`.
+   - El propio script hace `CREATE DATABASE IF NOT EXISTS consultora_iso27002`,
+     asi que no es necesario crearla a mano de antemano.
 
 > Si usas el nombre de base `consultora_iso27002` no necesitas configurar nada mas:
 > el proyecto ya apunta a esa base con usuario `root` y contrasena vacia (lo estandar
 > en WAMP). Ver Paso 3 solo si tu MySQL usa otros datos.
+>
+> Los archivos que antes vivian en `database/` (migraciones por fase) y
+> `sql/schema_merged.sql` quedaron en `database/archive/` y `sql/archive/`
+> como referencia historica: su contenido ya esta incorporado en
+> `sql/schema.sql`, **no deben importarse**.
 
 ---
 

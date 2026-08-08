@@ -15,6 +15,7 @@ final class Response extends BaseModel
             audit_id,
             question_id,
             answer,
+            maturity_level,
             justification,
             recommendation
         )
@@ -22,11 +23,13 @@ final class Response extends BaseModel
             :audit_id,
             :question_id,
             :answer,
+            :maturity_level,
             :justification,
             :recommendation
          )
          ON DUPLICATE KEY UPDATE
             answer         = VALUES(answer),
+            maturity_level = VALUES(maturity_level),
             justification  = VALUES(justification),
             recommendation = VALUES(recommendation)'
     );
@@ -35,7 +38,8 @@ final class Response extends BaseModel
         'audit_id'       => $auditId,
         'question_id'    => $questionId,
         'answer'         => $data['answer'],
-        'justification'  => $data['observation'] ?? null,
+        'maturity_level' => $data['maturity_level'] ?? null,
+        'justification'  => $data['justification'] ?? null,
         'recommendation' => $data['recommendation'] ?? null,
     ]);
 

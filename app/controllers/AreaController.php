@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Csrf;
 use App\Core\Flash;
@@ -25,8 +26,9 @@ final class AreaController extends Controller
     public function index(): void
     {
         Middleware::auth();
+        $scopedOrgId = Auth::organizationId();
         $search = trim((string) ($_GET['q'] ?? ''));
-        $organizationId = (int) ($_GET['organization_id'] ?? 0);
+        $organizationId = $scopedOrgId ?? (int) ($_GET['organization_id'] ?? 0);
         $sort = (string) ($_GET['sort'] ?? 'created_at');
         $direction = (string) ($_GET['direction'] ?? 'desc');
         $page = (int) ($_GET['page'] ?? 1);
@@ -34,29 +36,35 @@ final class AreaController extends Controller
         $this->view('areas/index', [
             'title' => 'Areas',
             'pagination' => $this->areas->paginateList($search, $organizationId, $sort, $direction, $page),
-            'organizations' => $this->organizations->activeOptions(),
+            'organizations' => $scopedOrgId !== null
+                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
+                : $this->organizations->activeOptions(),
             'search' => $search,
             'organizationId' => $organizationId,
             'sort' => $sort,
             'direction' => $direction,
+            'scoped' => $scopedOrgId !== null,
         ]);
         unset($_SESSION['_old']);
     }
 
     public function create(): void
     {
-        Middleware::roles(['admin']);
+        Middleware::roles(['admin', 'auditor']);
+        $scopedOrgId = Auth::organizationId();
         $this->view('areas/form', [
             'title' => 'Nueva area',
             'area' => null,
-            'organizations' => $this->organizations->activeOptions(),
+            'organizations' => $scopedOrgId !== null
+                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
+                : $this->organizations->activeOptions(),
             'action' => '/areas/store',
         ]);
     }
 
     public function store(): void
     {
-        Middleware::roles(['admin']);
+        Middleware::roles(['admin', 'auditor']);
         $data = $this->validatedData('/areas/create');
         if ($this->areas->nameExists((int) $data['organization_id'], $data['name'])) {
             $_SESSION['_old'] = $data;
@@ -77,29 +85,39 @@ final class AreaController extends Controller
             Flash::error('Area no encontrada.');
             $this->redirect('/areas');
         }
+        Middleware::ownsOrganization((int) $area['organization_id']);
         $this->view('areas/show', ['title' => 'Detalle de area', 'area' => $area]);
     }
 
     public function edit(): void
     {
-        Middleware::roles(['admin']);
+        Middleware::roles(['admin', 'auditor']);
         $area = $this->areas->find((int) ($_GET['id'] ?? 0));
         if (! $area) {
             Flash::error('Area no encontrada.');
             $this->redirect('/areas');
         }
+        Middleware::ownsOrganization((int) $area['organization_id']);
+
+        $scopedOrgId = Auth::organizationId();
         $this->view('areas/form', [
             'title' => 'Editar area',
             'area' => $area,
-            'organizations' => $this->organizations->activeOptions(),
+            'organizations' => $scopedOrgId !== null
+                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
+                : $this->organizations->activeOptions(),
             'action' => '/areas/update',
         ]);
     }
 
     public function update(): void
     {
-        Middleware::roles(['admin']);
+        Middleware::roles(['admin', 'auditor']);
         $id = (int) ($_POST['id'] ?? 0);
+        $current = $this->areas->find($id);
+        if (! $current) { Flash::error('Area no encontrada.'); $this->redirect('/areas'); }
+        Middleware::ownsOrganization((int) $current['organization_id']);
+
         $data = $this->validatedData('/areas/edit?id=' . $id);
         if ($this->areas->nameExists((int) $data['organization_id'], $data['name'], $id)) {
             $_SESSION['_old'] = $data;
@@ -114,13 +132,17 @@ final class AreaController extends Controller
 
     public function toggle(): void
     {
-        Middleware::roles(['admin']);
+        Middleware::roles(['admin', 'auditor']);
         if (! Csrf::validate($_POST['_csrf'] ?? null)) {
             Flash::error('La sesion expiro.');
             $this->redirect('/areas');
         }
 
         $id = (int) ($_POST['id'] ?? 0);
+        $area = $this->areas->find($id);
+        if (! $area) { Flash::error('Area no encontrada.'); $this->redirect('/areas'); }
+        Middleware::ownsOrganization((int) $area['organization_id']);
+
         $status = ($_POST['status'] ?? '') === 'active' ? 'active' : 'inactive';
         $this->areas->setStatus($id, $status);
         Flash::success('Estado del area actualizado.');
@@ -140,6 +162,11 @@ final class AreaController extends Controller
             'description' => trim((string) ($_POST['description'] ?? '')),
             'status' => (string) ($_POST['status'] ?? 'active'),
         ];
+
+        $scopedOrgId = Auth::organizationId();
+        if ($scopedOrgId !== null) {
+            $data['organization_id'] = $scopedOrgId;
+        }
 
         $validator = (new Validator())
             ->required('name', $data['name'], 'Nombre')

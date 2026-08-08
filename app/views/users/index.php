@@ -24,7 +24,7 @@
                         <td><span class="badge text-bg-<?= $user['status'] === 'active' ? 'success' : 'secondary' ?>"><?= e($user['status']) ?></span></td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/users/edit?id=<?= (int) $user['id'] ?>">Editar</a>
-                            <form class="d-inline" method="post" action="<?= BASE_URL ?>/users/delete" data-confirm="Â¿Desactivar este usuario?">
+                            <form class="d-inline" method="post" action="<?= BASE_URL ?>/users/delete" data-confirm="¿Desactivar este usuario?">
                                 <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
                                 <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Desactivar</button>

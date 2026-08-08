@@ -31,7 +31,15 @@ final class Database
                 self::$connection = new PDO($dsn, $config['username'], $config['password'], [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES => false,
+                    // Varias consultas de busqueda (Area, Organization, IsoControl,
+                    // IsoDomain, Question, Audit) reutilizan el mismo placeholder
+                    // nombrado (:search) varias veces en un mismo query. Con
+                    // sentencias preparadas nativas (false) MySQL solo enlaza el
+                    // valor a la primera aparicion y lanza
+                    // "SQLSTATE[HY093]: Invalid parameter number" en las demas.
+                    // Emulando la preparacion, PDO sustituye todas las apariciones
+                    // del mismo nombre por el valor enlazado una sola vez.
+                    PDO::ATTR_EMULATE_PREPARES => true,
                 ]);
             } catch (PDOException $exception) {
                 throw new PDOException('No fue posible conectar con la base de datos.', (int) $exception->getCode(), $exception);

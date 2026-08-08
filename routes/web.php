@@ -9,14 +9,18 @@ use App\Controllers\IsoControlController;
 use App\Controllers\IsoDomainController;
 use App\Controllers\LoginController;
 use App\Controllers\OrganizationController;
+use App\Controllers\PublicController;
 use App\Controllers\QuestionController;
 use App\Controllers\RecommendationController;
+use App\Controllers\RegisterController;
 use App\Controllers\UserController;
 
-$router->get('/', [LoginController::class, 'show']);
+$router->get('/', [PublicController::class, 'landing']);
 $router->get('/login', [LoginController::class, 'show']);
 $router->post('/login', [LoginController::class, 'authenticate']);
 $router->post('/logout', [LoginController::class, 'logout']);
+$router->get('/register', [RegisterController::class, 'show']);
+$router->post('/register', [RegisterController::class, 'store']);
 
 $router->get('/dashboard', [DashboardController::class, 'index']);
 
@@ -77,8 +81,10 @@ $router->get('/audits/areas-json', [AuditController::class, 'areasJson']);
 $router->get('/audits/run', [AuditController::class, 'run']);
 $router->post('/audits/save', [AuditController::class, 'save']);
 $router->post('/audits/reopen', [AuditController::class, 'reopen']);
+$router->post('/audits/cancel', [AuditController::class, 'cancel']);
 $router->post('/audits/upload-evidence', [AuditController::class, 'uploadEvidence']);
 $router->post('/audits/delete-evidence', [AuditController::class, 'deleteEvidence']);
+$router->get('/audits/evidence', [AuditController::class, 'downloadEvidence']);
 $router->get('/audits/report', [AuditController::class, 'report']);
 
 $router->get('/recommendations', [RecommendationController::class, 'index']);

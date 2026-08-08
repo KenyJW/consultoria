@@ -42,7 +42,19 @@ final class Auth
             'name' => $user['name'],
             'email' => $user['email'],
             'role' => $user['role'],
+            'organization_id' => isset($user['organization_id']) ? (int) $user['organization_id'] : null,
         ];
+    }
+
+    /**
+     * Organizacion a la que queda restringido el usuario actual, o null si
+     * es personal de la consultora (admin/auditor asignado manualmente) sin
+     * restriccion de organizacion.
+     */
+    public static function organizationId(): ?int
+    {
+        $orgId = self::user()['organization_id'] ?? null;
+        return $orgId !== null ? (int) $orgId : null;
     }
 
     public static function logout(): void

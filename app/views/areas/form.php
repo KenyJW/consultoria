@@ -8,10 +8,10 @@
             <?php endif; ?>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label" for="organization_id">OrganizaciÃ³n</label>
+                    <label class="form-label" for="organization_id">Organización</label>
                     <?php $selectedOrganization = (int) ($_SESSION['_old']['organization_id'] ?? $area['organization_id'] ?? 0); ?>
                     <select class="form-select" id="organization_id" name="organization_id" required>
-                        <option value="">Seleccione una organizaciÃ³n</option>
+                        <option value="">Seleccione una organización</option>
                         <?php foreach ($organizations as $organization): ?>
                             <option value="<?= (int) $organization['id'] ?>" <?= $selectedOrganization === (int) $organization['id'] ? 'selected' : '' ?>><?= e($organization['name']) ?></option>
                         <?php endforeach; ?>
@@ -22,7 +22,7 @@
                     <input class="form-control" id="name" name="name" value="<?= e($_SESSION['_old']['name'] ?? $area['name'] ?? '') ?>" required>
                 </div>
                 <div class="col-md-8">
-                    <label class="form-label" for="description">DescripciÃ³n</label>
+                    <label class="form-label" for="description">Descripción</label>
                     <textarea class="form-control" id="description" name="description" rows="4"><?= e($_SESSION['_old']['description'] ?? $area['description'] ?? '') ?></textarea>
                 </div>
                 <div class="col-md-4">

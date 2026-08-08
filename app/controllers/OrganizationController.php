@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Csrf;
 use App\Core\Flash;
@@ -22,6 +23,12 @@ final class OrganizationController extends Controller
     public function index(): void
     {
         Middleware::auth();
+        $scopedOrgId = Auth::organizationId();
+        if ($scopedOrgId !== null) {
+            // Un usuario autoregistrado solo tiene una organizacion: va directo a su ficha.
+            $this->redirect('/organizations/show?id=' . $scopedOrgId);
+        }
+
         $search = trim((string) ($_GET['q'] ?? ''));
         $sort = (string) ($_GET['sort'] ?? 'created_at');
         $direction = (string) ($_GET['direction'] ?? 'desc');
@@ -70,6 +77,7 @@ final class OrganizationController extends Controller
             Flash::error('Organizacion no encontrada.');
             $this->redirect('/organizations');
         }
+        Middleware::ownsOrganization((int) $organization['id']);
 
         $this->view('organizations/show', ['title' => 'Detalle de organizacion', 'organization' => $organization]);
     }

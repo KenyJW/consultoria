@@ -1,7 +1,7 @@
 <?php use App\Core\Csrf; ?>
 <form class="row g-2 mb-3" method="get" action="<?= BASE_URL ?>/areas">
     <div class="col-md-4">
-        <input class="form-control" name="q" value="<?= e($search) ?>" placeholder="Buscar por Ã¡rea u organizaciÃ³n">
+        <input class="form-control" name="q" value="<?= e($search) ?>" placeholder="Buscar por área u organización">
     </div>
     <div class="col-md-3">
         <select class="form-select" name="organization_id">
@@ -14,8 +14,8 @@
     <div class="col-md-2">
         <select class="form-select" name="sort">
             <option value="created_at" <?= $sort === 'created_at' ? 'selected' : '' ?>>Registro</option>
-            <option value="name" <?= $sort === 'name' ? 'selected' : '' ?>>Ãrea</option>
-            <option value="organization_name" <?= $sort === 'organization_name' ? 'selected' : '' ?>>OrganizaciÃ³n</option>
+            <option value="name" <?= $sort === 'name' ? 'selected' : '' ?>>Área</option>
+            <option value="organization_name" <?= $sort === 'organization_name' ? 'selected' : '' ?>>Organización</option>
             <option value="status" <?= $sort === 'status' ? 'selected' : '' ?>>Estado</option>
         </select>
     </div>
@@ -30,7 +30,7 @@
     </div>
 </form>
 <div class="d-flex justify-content-end mb-3">
-    <a class="btn btn-primary" href="<?= BASE_URL ?>/areas/create">Nueva Ã¡rea</a>
+    <a class="btn btn-primary" href="<?= BASE_URL ?>/areas/create">Nueva área</a>
 </div>
 <div class="card border-0 shadow-sm">
     <div class="card-body">
@@ -38,8 +38,8 @@
             <table class="table align-middle">
                 <thead>
                 <tr>
-                    <th>Ãrea</th>
-                    <th>OrganizaciÃ³n</th>
+                    <th>Área</th>
+                    <th>Organización</th>
                     <th>Estado</th>
                     <th>Registro</th>
                     <th class="text-end">Acciones</th>
@@ -55,7 +55,7 @@
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-secondary" href="<?= BASE_URL ?>/areas/show?id=<?= (int) $area['id'] ?>">Ver</a>
                             <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/areas/edit?id=<?= (int) $area['id'] ?>">Editar</a>
-                            <form class="d-inline" method="post" action="<?= BASE_URL ?>/areas/toggle" data-confirm="Â¿Cambiar estado de esta Ã¡rea?">
+                            <form class="d-inline" method="post" action="<?= BASE_URL ?>/areas/toggle" data-confirm="¿Cambiar estado de esta área?">
                                 <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
                                 <input type="hidden" name="id" value="<?= (int) $area['id'] ?>">
                                 <input type="hidden" name="status" value="<?= $area['status'] === 'active' ? 'inactive' : 'active' ?>">
@@ -65,7 +65,7 @@
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($pagination['items'] === []): ?>
-                    <tr><td colspan="5" class="text-center text-muted py-4">No hay Ã¡reas registradas.</td></tr>
+                    <tr><td colspan="5" class="text-center text-muted py-4">No hay áreas registradas.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

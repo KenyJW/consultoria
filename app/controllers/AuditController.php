@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Csrf;
 use App\Core\Flash;
@@ -14,6 +15,7 @@ use App\Models\Audit;
 use App\Models\AuditControlMaturity;
 use App\Models\Evidence;
 use App\Models\Organization;
+use App\Models\QuestionMaturityScale;
 use App\Models\Response;
 use App\Models\User;
 
@@ -39,6 +41,7 @@ final class AuditController extends Controller
     private Response $responses;
     private Evidence $evidences;
     private AuditControlMaturity $controlMaturity;
+    private QuestionMaturityScale $maturityScales;
 
     public function __construct()
     {
@@ -49,13 +52,15 @@ final class AuditController extends Controller
         $this->responses       = new Response();
         $this->evidences       = new Evidence();
         $this->controlMaturity = new AuditControlMaturity();
+        $this->maturityScales  = new QuestionMaturityScale();
     }
 
     public function index(): void
     {
         Middleware::auth();
+        $scopedOrgId    = Auth::organizationId();
         $search         = trim((string) ($_GET['q'] ?? ''));
-        $organizationId = (int) ($_GET['organization_id'] ?? 0);
+        $organizationId = $scopedOrgId ?? (int) ($_GET['organization_id'] ?? 0);
         $status         = (string) ($_GET['status'] ?? '');
         $sort           = (string) ($_GET['sort'] ?? 'created_at');
         $direction      = (string) ($_GET['direction'] ?? 'desc');
@@ -64,12 +69,15 @@ final class AuditController extends Controller
         $this->view('audits/index', [
             'title'          => 'Auditorias',
             'pagination'     => $this->audits->paginateList($search, $organizationId, $status, $sort, $direction, $page),
-            'organizations'  => $this->organizations->activeOptions(),
+            'organizations'  => $scopedOrgId !== null
+                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
+                : $this->organizations->activeOptions(),
             'search'         => $search,
             'organizationId' => $organizationId,
             'status'         => $status,
             'sort'           => $sort,
             'direction'      => $direction,
+            'scoped'         => $scopedOrgId !== null,
         ]);
         unset($_SESSION['_old']);
     }
@@ -77,11 +85,16 @@ final class AuditController extends Controller
     public function create(): void
     {
         Middleware::roles(['admin', 'auditor']);
+        $scopedOrgId = Auth::organizationId();
+        $currentUser = \App\Core\Auth::user();
+
         $this->view('audits/form', [
             'title'         => 'Nueva auditoria',
             'audit'         => null,
-            'organizations' => $this->organizations->activeOptions(),
-            'auditors'      => $this->users->auditors(),
+            'organizations' => $scopedOrgId !== null
+                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
+                : $this->organizations->activeOptions(),
+            'auditors'      => $scopedOrgId !== null ? [$currentUser] : $this->users->auditors(),
             'action'        => '/audits/store',
         ]);
     }
@@ -89,7 +102,9 @@ final class AuditController extends Controller
     public function store(): void
     {
         Middleware::roles(['admin', 'auditor']);
-        $data           = $this->validatedData('/audits/create');
+        $data = $this->validatedData('/audits/create');
+        $this->enforceOwnOrganization($data['organization_id'], '/audits/create');
+
         $data['status'] = 'draft';
         $id             = $this->audits->create($data);
         Flash::success('Auditoria creada. Ahora puede responder el cuestionario.');
@@ -101,11 +116,17 @@ final class AuditController extends Controller
         Middleware::roles(['admin', 'auditor']);
         $audit = $this->audits->find((int) ($_GET['id'] ?? 0));
         if (! $audit) { Flash::error('Auditoria no encontrada.'); $this->redirect('/audits'); }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
+
+        $scopedOrgId = Auth::organizationId();
+        $currentUser = \App\Core\Auth::user();
         $this->view('audits/form', [
             'title'         => 'Editar auditoria',
             'audit'         => $audit,
-            'organizations' => $this->organizations->activeOptions(),
-            'auditors'      => $this->users->auditors(),
+            'organizations' => $scopedOrgId !== null
+                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
+                : $this->organizations->activeOptions(),
+            'auditors'      => $scopedOrgId !== null ? [$currentUser] : $this->users->auditors(),
             'action'        => '/audits/update',
         ]);
     }
@@ -113,8 +134,14 @@ final class AuditController extends Controller
     public function update(): void
     {
         Middleware::roles(['admin', 'auditor']);
-        $id   = (int) ($_POST['id'] ?? 0);
+        $id      = (int) ($_POST['id'] ?? 0);
+        $current = $this->audits->find($id);
+        if (! $current) { Flash::error('Auditoria no encontrada.'); $this->redirect('/audits'); }
+        Middleware::ownsOrganization((int) $current['organization_id']);
+
         $data = $this->validatedData('/audits/edit?id=' . $id);
+        $this->enforceOwnOrganization($data['organization_id'], '/audits/edit?id=' . $id);
+
         $this->audits->update($id, $data);
         Flash::success('Auditoria actualizada correctamente.');
         $this->redirect('/audits');
@@ -125,6 +152,8 @@ final class AuditController extends Controller
         Middleware::auth();
         $audit = $this->audits->find((int) ($_GET['id'] ?? 0));
         if (! $audit) { Flash::error('Auditoria no encontrada.'); $this->redirect('/audits'); }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
+
         $this->view('audits/show', [
             'title'    => 'Detalle de auditoria',
             'audit'    => $audit,
@@ -135,7 +164,7 @@ final class AuditController extends Controller
     public function areasJson(): void
     {
         Middleware::auth();
-        $organizationId = (int) ($_GET['organization_id'] ?? 0);
+        $organizationId = Auth::organizationId() ?? (int) ($_GET['organization_id'] ?? 0);
         $db             = \App\Core\Database::getConnection();
         $statement      = $db->prepare('SELECT id, name FROM areas WHERE organization_id = :oid AND status = "active" ORDER BY name ASC');
         $statement->execute(['oid' => $organizationId]);
@@ -149,8 +178,9 @@ final class AuditController extends Controller
         Middleware::roles(['admin', 'auditor']);
         $audit = $this->audits->find((int) ($_GET['id'] ?? 0));
         if (! $audit) { Flash::error('Auditoria no encontrada.'); $this->redirect('/audits'); }
-        if ($audit['status'] === 'closed') {
-            Flash::error('La auditoria esta cerrada y no admite cambios.');
+        Middleware::ownsOrganization((int) $audit['organization_id']);
+        if (in_array($audit['status'], ['closed', 'cancelled'], true)) {
+            Flash::error('La auditoria esta ' . ($audit['status'] === 'closed' ? 'cerrada' : 'cancelada') . ' y no admite cambios.');
             $this->redirect('/audits/show?id=' . $audit['id']);
         }
 
@@ -158,7 +188,7 @@ final class AuditController extends Controller
         $this->view('audits/run', [
             'title'          => 'Cuestionario: ' . $audit['name'],
             'audit'          => $audit,
-            'groups'         => $this->groupQuestionnaire($rows),
+            'groups'         => $this->groupQuestionnaire($rows, $this->maturityScales->forAllQuestions()),
             'evidences'      => $this->evidences->forAuditByQuestion((int) $audit['id']),
             'progress'       => $this->audits->progress((int) $audit['id']),
             'maturityMap'    => $this->controlMaturity->mapForAudit((int) $audit['id']),
@@ -177,31 +207,38 @@ final class AuditController extends Controller
         if (! $audit || $audit['status'] === 'closed') {
             Flash::error('Auditoria no valida.'); $this->redirect('/audits');
         }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
 
         $mode            = ($_POST['mode'] ?? 'partial') === 'final' ? 'final' : 'partial';
         $answers         = (array) ($_POST['answer'] ?? []);
-        $observations    = (array) ($_POST['observation'] ?? []);
+        $maturityLevels  = (array) ($_POST['maturity_level'] ?? []);
+        $justifications  = (array) ($_POST['justification'] ?? []);
         $recommendations = (array) ($_POST['recommendation'] ?? []);
-        $maturityLevels  = (array) ($_POST['control_maturity'] ?? []);
 
-        // Guardar respuestas Sí/No/Na por pregunta
+        // Guardar respuesta, nivel de madurez y justificación por pregunta
         $saved = 0;
         foreach ($answers as $questionId => $answer) {
             $questionId = (int) $questionId;
             $answer     = in_array($answer, ['yes', 'no', 'na'], true) ? $answer : null;
+
+            $maturityRaw   = $maturityLevels[$questionId] ?? '';
+            $maturityLevel = $maturityRaw === '' ? null : max(0, min(5, (int) $maturityRaw));
+
+            $justification = trim((string) ($justifications[$questionId] ?? ''));
+            $justification = $justification !== '' ? mb_substr($justification, 0, 500) : null;
+
             $this->responses->upsert($auditId, $questionId, [
                 'answer'         => $answer,
-                'observation'    => trim((string) ($observations[$questionId] ?? '')) ?: null,
+                'maturity_level' => $maturityLevel,
+                'justification'  => $justification,
                 'recommendation' => trim((string) ($recommendations[$questionId] ?? '')) ?: null,
             ]);
             $saved++;
         }
 
-        // Guardar nivel de madurez por control
-        foreach ($maturityLevels as $controlId => $level) {
-            $level = max(0, min(5, (int) $level));
-            $this->controlMaturity->upsert($auditId, (int) $controlId, $level);
-        }
+        // La madurez por control ya no la asigna el auditor directamente:
+        // se recalcula como promedio ponderado de la madurez de sus preguntas.
+        $this->controlMaturity->recalculateForAudit($auditId);
 
         if ($mode === 'final') {
             $controlRows = $this->controlMaturity->forAudit($auditId);
@@ -227,19 +264,44 @@ final class AuditController extends Controller
             $this->audits->setStatus($auditId, 'in_progress');
         }
         Flash::success('Progreso guardado (' . $saved . ' respuestas).');
-        $this->redirect('/audits/run?id=' . $auditId);
+
+        $exitAfterSave = ($_POST['exit_after_save'] ?? '0') === '1';
+        $this->redirect($exitAfterSave ? '/audits' : '/audits/run?id=' . $auditId);
     }
 
     public function reopen(): void
     {
-        Middleware::roles(['admin']);
+        Middleware::roles(['admin', 'auditor']);
         if (! Csrf::validate($_POST['_csrf'] ?? null)) {
             Flash::error('La sesion expiro.'); $this->redirect('/audits');
         }
-        $id = (int) ($_POST['id'] ?? 0);
+        $id    = (int) ($_POST['id'] ?? 0);
+        $audit = $this->audits->find($id);
+        if (! $audit) { Flash::error('Auditoria no encontrada.'); $this->redirect('/audits'); }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
+
         $this->audits->setStatus($id, 'in_progress');
         Flash::success('Auditoria reabierta para edicion.');
         $this->redirect('/audits/run?id=' . $id);
+    }
+
+    /** Cancela una auditoria inconclusa (no cuenta como cerrada ni sigue en progreso). */
+    public function cancel(): void
+    {
+        Middleware::roles(['admin', 'auditor']);
+        if (! Csrf::validate($_POST['_csrf'] ?? null)) {
+            Flash::error('La sesion expiro.'); $this->redirect('/audits');
+        }
+        $id    = (int) ($_POST['id'] ?? 0);
+        $audit = $this->audits->find($id);
+        if (! $audit || $audit['status'] === 'closed') {
+            Flash::error('Auditoria no valida para cancelar.'); $this->redirect('/audits');
+        }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
+
+        $this->audits->setStatus($id, 'cancelled');
+        Flash::success('Auditoria cancelada. Puede reabrirla luego si lo necesita.');
+        $this->redirect('/audits');
     }
 
     public function uploadEvidence(): void
@@ -255,6 +317,7 @@ final class AuditController extends Controller
         if (! $audit || $audit['status'] === 'closed') {
             Flash::error('Auditoria no valida.'); $this->redirect('/audits');
         }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
 
         $file = $_FILES['evidence'] ?? null;
         if (! $file || ! is_uploaded_file($file['tmp_name'] ?? '') || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
@@ -275,7 +338,7 @@ final class AuditController extends Controller
         $responseId = $this->responses->findId($auditId, $questionId);
         if ($responseId === 0) {
             $responseId = $this->responses->upsert($auditId, $questionId, [
-                'answer' => null, 'observation' => null, 'recommendation' => null,
+                'answer' => null, 'maturity_level' => null, 'justification' => null, 'recommendation' => null,
             ]);
         }
 
@@ -310,12 +373,48 @@ final class AuditController extends Controller
         $auditId  = (int) ($_POST['audit_id'] ?? 0);
         $evidence = $this->evidences->find((int) ($_POST['id'] ?? 0));
         if ($evidence) {
+            // No confiar en audit_id del formulario: se verifica la auditoria
+            // real de la evidencia para evitar que alguien borre evidencias
+            // de otra organizacion pasando su propio audit_id.
+            $realAuditId = $this->evidences->auditIdFor((int) $evidence['id']);
+            $owningAudit = $realAuditId !== null ? $this->audits->find($realAuditId) : null;
+            if (! $owningAudit) { Flash::error('Evidencia no valida.'); $this->redirect('/audits'); }
+            Middleware::ownsOrganization((int) $owningAudit['organization_id']);
+
             $path = BASE_PATH . '/public/uploads/evidences/' . $evidence['stored_name'];
             if (is_file($path)) { unlink($path); }
             $this->evidences->delete((int) $evidence['id']);
             Flash::success('Evidencia eliminada.');
         }
         $this->redirect('/audits/run?id=' . $auditId);
+    }
+
+    /**
+     * Entrega una evidencia solo si el usuario pertenece a la organizacion
+     * dueña de la auditoria (la carpeta de evidencias esta bloqueada al
+     * acceso HTTP directo via public/uploads/evidences/.htaccess; este es
+     * el unico camino valido para descargarlas).
+     */
+    public function downloadEvidence(): void
+    {
+        Middleware::auth();
+        $evidence = $this->evidences->find((int) ($_GET['id'] ?? 0));
+        if (! $evidence) { Flash::error('Evidencia no encontrada.'); $this->redirect('/audits'); }
+
+        $realAuditId = $this->evidences->auditIdFor((int) $evidence['id']);
+        $owningAudit = $realAuditId !== null ? $this->audits->find($realAuditId) : null;
+        if (! $owningAudit) { Flash::error('Evidencia no valida.'); $this->redirect('/audits'); }
+        Middleware::ownsOrganization((int) $owningAudit['organization_id']);
+
+        $path = BASE_PATH . '/public/uploads/evidences/' . $evidence['stored_name'];
+        if (! is_file($path)) { Flash::error('El archivo ya no existe.'); $this->redirect('/audits'); }
+
+        header('Content-Type: ' . $evidence['mime_type']);
+        header('Content-Length: ' . (string) filesize($path));
+        header('Content-Disposition: inline; filename="' . str_replace('"', '', $evidence['original_name']) . '"');
+        header('X-Content-Type-Options: nosniff');
+        readfile($path);
+        exit;
     }
 
     /** Reporte ejecutivo de una auditoría cerrada (Fase 6). */
@@ -327,6 +426,7 @@ final class AuditController extends Controller
             Flash::error('Reporte disponible solo para auditorias cerradas.');
             $this->redirect('/audits');
         }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
 
         $controlRows  = $this->controlMaturity->forAudit((int) $audit['id']);
         $responseRows = $this->responses->forAudit((int) $audit['id']);
@@ -360,45 +460,69 @@ final class AuditController extends Controller
             'lowestMaturity'=> $lowestMaturity,
             'highestRisk'   => $highestRisk,
             'controlNames'  => $controlNames,
-            'maturityDomain' => $this->audits->maturityByDomain(),
+            'maturityDomain' => $this->audits->maturityByDomain(Auth::organizationId()),
         ], 'none');
     }
 
-    private function groupQuestionnaire(array $rows): array
+    private function groupQuestionnaire(array $rows, array $maturityScales = []): array
     {
         $groups = [];
         foreach ($rows as $row) {
             $domainId  = (int) $row['domain_id'];
             $controlId = (int) $row['control_id'];
+            $questionId = (int) $row['question_id'];
 
             if (! isset($groups[$domainId])) {
                 $groups[$domainId] = [
-                    'domain_code' => $row['domain_code'],
-                    'domain_name' => $row['domain_name'],
-                    'controls'    => [],
+                    'domain_code'        => $row['domain_code'],
+                    'domain_name'        => $row['domain_name'],
+                    'domain_description' => $row['domain_description'] ?? null,
+                    'controls'           => [],
                 ];
             }
             if (! isset($groups[$domainId]['controls'][$controlId])) {
                 $groups[$domainId]['controls'][$controlId] = [
-                    'control_id'     => $controlId,
-                    'control_code'   => $row['control_code'],
-                    'control_title'  => $row['control_title'],
-                    'control_weight' => $row['control_weight'],
+                    'control_id'         => $controlId,
+                    'control_code'       => $row['control_code'],
+                    'control_title'      => $row['control_title'],
+                    'control_description'=> $row['control_description'] ?? null,
+                    'control_objective'  => $row['control_objective'] ?? null,
+                    'iso_reference'      => $row['iso_reference'] ?? null,
+                    'control_weight'     => $row['control_weight'],
                     'confidentiality'=> (int) $row['confidentiality'],
                     'integrity'      => (int) $row['integrity'],
                     'availability'   => (int) $row['availability'],
+                    'domain_code'    => $row['domain_code'],
+                    'domain_name'    => $row['domain_name'],
                     'questions'      => [],
                 ];
             }
             $groups[$domainId]['controls'][$controlId]['questions'][] = [
-                'question_id'   => (int) $row['question_id'],
-                'question_text' => $row['question_text'],
-                'answer'        => $row['answer'],
-                'observation'   => $row['observation'],
-                'recommendation'=> $row['recommendation'],
+                'question_id'    => $questionId,
+                'question_text'  => $row['question_text'],
+                'answer'         => $row['answer'],
+                'maturity_level' => $row['maturity_level'],
+                'justification'  => $row['justification'],
+                'recommendation' => $row['recommendation'],
+                'maturity_scale' => $maturityScales[$questionId] ?? [],
             ];
         }
         return $groups;
+    }
+
+    /**
+     * Si el usuario esta restringido a una organizacion (autoregistro), obliga
+     * a que la auditoria pertenezca a esa organizacion y que el auditor
+     * asignado sea el mismo usuario (no permite manipular el formulario para
+     * crear auditorias en otra organizacion o asignarlas a otra persona).
+     */
+    private function enforceOwnOrganization(int $organizationId, string $failureRedirect): void
+    {
+        $scopedOrgId = Auth::organizationId();
+        if ($scopedOrgId !== null && $organizationId !== $scopedOrgId) {
+            Flash::error('Solo puede crear auditorias para su propia organizacion.');
+            $this->redirect($failureRedirect);
+        }
     }
 
     private function validatedData(string $failureRedirect): array
@@ -418,6 +542,13 @@ final class AuditController extends Controller
             'end_date'         => $endDate !== '' ? $endDate : null,
         ];
 
+        // Un usuario restringido a su organizacion solo puede auditarse a si mismo.
+        $scopedOrgId = Auth::organizationId();
+        if ($scopedOrgId !== null) {
+            $data['organization_id'] = $scopedOrgId;
+            $data['auditor_user_id'] = (int) Auth::user()['id'];
+        }
+
         $validator = (new Validator())
             ->required('name', $data['name'], 'Nombre de la auditoria')
             ->required('start_date', $data['start_date'], 'Fecha de inicio');
@@ -428,6 +559,16 @@ final class AuditController extends Controller
                 Flash::error('Seleccione ' . $label . ' valida.');
                 $this->redirect($failureRedirect);
             }
+        }
+
+        // El area debe pertenecer realmente a la organizacion indicada (evita
+        // referencias cruzadas entre organizaciones, aunque organization_id
+        // ya este protegido contra manipulacion del formulario).
+        $area = $this->areas->find($data['area_id']);
+        if (! $area || (int) $area['organization_id'] !== $data['organization_id']) {
+            $_SESSION['_old'] = $data;
+            Flash::error('El area seleccionada no pertenece a la organizacion indicada.');
+            $this->redirect($failureRedirect);
         }
 
         if ($validator->fails()) {

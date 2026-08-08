@@ -1,7 +1,7 @@
 <?php use App\Core\Csrf; ?>
 <?php
-$statusLabels = ['draft' => 'Borrador', 'in_progress' => 'En progreso', 'closed' => 'Cerrada'];
-$statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 'success'];
+$statusLabels = ['draft' => 'Borrador', 'in_progress' => 'En progreso', 'closed' => 'Cerrada', 'cancelled' => 'Cancelada'];
+$statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 'success', 'cancelled' => 'dark'];
 ?>
 <form class="row g-2 mb-3" method="get" action="<?= BASE_URL ?>/audits">
     <div class="col-md-3">
@@ -21,6 +21,7 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
             <option value="draft" <?= $status === 'draft' ? 'selected' : '' ?>>Borrador</option>
             <option value="in_progress" <?= $status === 'in_progress' ? 'selected' : '' ?>>En progreso</option>
             <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Cerrada</option>
+            <option value="cancelled" <?= $status === 'cancelled' ? 'selected' : '' ?>>Cancelada</option>
         </select>
     </div>
     <div class="col-md-2">
@@ -70,7 +71,7 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
                         <td><span class="badge text-bg-<?= $statusBadge[$audit['status']] ?? 'secondary' ?>"><?= e($statusLabels[$audit['status']] ?? $audit['status']) ?></span></td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-secondary" href="<?= BASE_URL ?>/audits/show?id=<?= (int) $audit['id'] ?>">Ver</a>
-                            <?php if ($audit['status'] !== 'closed'): ?>
+                            <?php if (! in_array($audit['status'], ['closed', 'cancelled'], true)): ?>
                                 <a class="btn btn-sm btn-outline-success" href="<?= BASE_URL ?>/audits/run?id=<?= (int) $audit['id'] ?>">Responder</a>
                                 <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/audits/edit?id=<?= (int) $audit['id'] ?>">Editar</a>
                             <?php endif; ?>

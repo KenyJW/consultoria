@@ -1,8 +1,8 @@
 <?php use App\Core\Csrf;
 use App\Core\MaturityCalculator; ?>
 <?php
-$statusLabels = ['draft' => 'Borrador', 'in_progress' => 'En progreso', 'closed' => 'Cerrada'];
-$statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 'success'];
+$statusLabels = ['draft' => 'Borrador', 'in_progress' => 'En progreso', 'closed' => 'Cerrada', 'cancelled' => 'Cancelada'];
+$statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 'success', 'cancelled' => 'dark'];
 ?>
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
@@ -67,8 +67,19 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
         </div>
         <div class="d-flex justify-content-end gap-2 mt-4">
             <a class="btn btn-outline-secondary" href="<?= BASE_URL ?>/audits">Volver</a>
-            <?php if ($audit['status'] !== 'closed'): ?>
+            <?php if (in_array($audit['status'], ['draft', 'in_progress'], true)): ?>
                 <a class="btn btn-primary" href="<?= BASE_URL ?>/audits/run?id=<?= (int) $audit['id'] ?>">Continuar cuestionario</a>
+                <form method="post" action="<?= BASE_URL ?>/audits/cancel" data-confirm="Cancelar esta auditoria? Podra reabrirla luego, pero quedara marcada como cancelada.">
+                    <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
+                    <input type="hidden" name="id" value="<?= (int) $audit['id'] ?>">
+                    <button class="btn btn-outline-danger" type="submit">Cancelar auditoria</button>
+                </form>
+            <?php elseif ($audit['status'] === 'cancelled'): ?>
+                <form method="post" action="<?= BASE_URL ?>/audits/reopen" data-confirm="Reabrir esta auditoria para continuar el cuestionario?">
+                    <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
+                    <input type="hidden" name="id" value="<?= (int) $audit['id'] ?>">
+                    <button class="btn btn-outline-warning" type="submit">Reabrir</button>
+                </form>
             <?php else: ?>
                 <form method="post" action="<?= BASE_URL ?>/audits/reopen" data-confirm="Reabrir esta auditoria para edicion?">
                     <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">

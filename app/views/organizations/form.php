@@ -16,7 +16,7 @@
                     <input class="form-control" id="email" name="email" type="email" value="<?= e($_SESSION['_old']['email'] ?? $organization['email'] ?? '') ?>">
                 </div>
                 <div class="col-md-8">
-                    <label class="form-label" for="address">DirecciÃ³n</label>
+                    <label class="form-label" for="address">Dirección</label>
                     <input class="form-control" id="address" name="address" value="<?= e($_SESSION['_old']['address'] ?? $organization['address'] ?? '') ?>">
                 </div>
                 <div class="col-md-4">

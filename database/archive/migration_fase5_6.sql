@@ -1,3 +1,6 @@
+-- OBSOLETO: ya incorporado en sql/schema.sql (notas de Fase 5-6 (sin cambios de esquema)).
+-- Se conserva solo como referencia historica, NO importar.
+
 -- ============================================================
 -- Fase 5 y 6 – Notas de migración
 -- ============================================================

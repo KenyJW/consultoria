@@ -64,4 +64,33 @@ final class AuditControlMaturity extends BaseModel
         }
         return $map;
     }
+
+    /**
+     * Recalcula la madurez de cada control a partir de la madurez asignada
+     * por el auditor a nivel de PREGUNTA (responses.maturity_level),
+     * ponderada por el peso de cada pregunta. Se ejecuta cada vez que se
+     * guarda el cuestionario, para que audit_control_maturity (que
+     * consumen el dashboard, el reporte y la comparación historica) se
+     * mantenga consistente sin que el auditor tenga que calificar el
+     * control por separado.
+     */
+    public function recalculateForAudit(int $auditId): void
+    {
+        $statement = $this->db->prepare(
+            'SELECT q.control_id,
+                    SUM(r.maturity_level * q.weight) AS weighted_sum,
+                    SUM(q.weight) AS total_weight
+             FROM responses r
+             INNER JOIN questions q ON q.id = r.question_id
+             WHERE r.audit_id = :audit_id AND r.maturity_level IS NOT NULL
+             GROUP BY q.control_id'
+        );
+        $statement->execute(['audit_id' => $auditId]);
+
+        foreach ($statement->fetchAll() as $row) {
+            $totalWeight = (float) $row['total_weight'];
+            $average     = $totalWeight > 0 ? (float) $row['weighted_sum'] / $totalWeight : 0.0;
+            $this->upsert($auditId, (int) $row['control_id'], (int) round($average));
+        }
+    }
 }

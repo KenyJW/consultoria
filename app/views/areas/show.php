@@ -2,15 +2,15 @@
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-6">
-                <div class="text-muted">Ãrea</div>
+                <div class="text-muted">Área</div>
                 <div class="fw-semibold"><?= e($area['name']) ?></div>
             </div>
             <div class="col-md-6">
-                <div class="text-muted">OrganizaciÃ³n</div>
+                <div class="text-muted">Organización</div>
                 <div><?= e($area['organization_name']) ?></div>
             </div>
             <div class="col-md-12">
-                <div class="text-muted">DescripciÃ³n</div>
+                <div class="text-muted">Descripción</div>
                 <div><?= nl2br(e($area['description'])) ?></div>
             </div>
             <div class="col-md-4">
@@ -22,7 +22,7 @@
                 <div><?= e(date('d/m/Y H:i', strtotime($area['created_at']))) ?></div>
             </div>
             <div class="col-md-4">
-                <div class="text-muted">Ãšltima actualizaciÃ³n</div>
+                <div class="text-muted">�?ltima actualización</div>
                 <div><?= e(date('d/m/Y H:i', strtotime($area['updated_at']))) ?></div>
             </div>
         </div>

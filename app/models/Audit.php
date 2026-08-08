@@ -31,7 +31,7 @@ final class Audit extends BaseModel
             $whereParts[] = 'au.organization_id = :organization_id';
             $params[':organization_id'] = $organizationId;
         }
-        if (in_array($status, ['draft', 'in_progress', 'closed'], true)) {
+        if (in_array($status, ['draft', 'in_progress', 'closed', 'cancelled'], true)) {
             $whereParts[] = 'au.status = :status';
             $params[':status'] = $status;
         }
@@ -126,10 +126,14 @@ final class Audit extends BaseModel
             d.id AS domain_id,
             d.code AS domain_code,
             d.name AS domain_name,
+            d.description AS domain_description,
 
             c.id AS control_id,
             c.code AS control_code,
             c.title AS control_title,
+            c.description AS control_description,
+            c.objective AS control_objective,
+            c.iso_reference,
             c.weight AS control_weight,
             c.confidentiality,
             c.integrity,
@@ -141,7 +145,8 @@ final class Audit extends BaseModel
 
             r.id AS response_id,
             r.answer,
-            r.justification AS observation,
+            r.maturity_level,
+            r.justification,
             r.recommendation
 
          FROM iso_controls c
@@ -158,51 +163,83 @@ final class Audit extends BaseModel
 
     return $statement->fetchAll();
 }
-    /** Estadísticas globales para el dashboard. */
-    public function stats(): array
+    /**
+     * Estadísticas para el dashboard.
+     * @param int|null $organizationId Si se indica, limita a esa organización (usuarios autoregistrados).
+     */
+    public function stats(?int $organizationId = null): array
     {
-        $row = $this->db->query(
-            'SELECT
+        $where = '';
+        $params = [];
+        if ($organizationId !== null) {
+            $where = 'WHERE organization_id = :organization_id';
+            $params['organization_id'] = $organizationId;
+        }
+
+        $statement = $this->db->prepare(
+            "SELECT
                 COUNT(*) AS total,
-                SUM(status = "closed") AS closed,
-                SUM(status = "in_progress") AS in_progress,
-                SUM(status = "draft") AS draft,
+                SUM(status = 'closed') AS closed,
+                SUM(status = 'in_progress') AS in_progress,
+                SUM(status = 'draft') AS draft,
                 ROUND(AVG(CASE WHEN maturity_score IS NOT NULL THEN maturity_score END), 2) AS avg_maturity,
                 ROUND(AVG(CASE WHEN risk_score IS NOT NULL THEN risk_score END), 2) AS avg_risk
-             FROM audits'
-        )->fetch();
+             FROM audits
+             {$where}"
+        );
+        $statement->execute($params);
+        $row = $statement->fetch();
         return $row ?: [];
     }
 
     /** Últimas auditorías cerradas con scores para el dashboard. */
-    public function recentClosed(int $limit = 5): array
+    public function recentClosed(int $limit = 5, ?int $organizationId = null): array
     {
+        $where = 'WHERE au.status = "closed" AND au.maturity_score IS NOT NULL';
+        if ($organizationId !== null) {
+            $where .= ' AND au.organization_id = :organization_id';
+        }
+
         $statement = $this->db->prepare(
-            'SELECT au.id, au.name, au.maturity_score, au.risk_score, au.end_date,
+            "SELECT au.id, au.name, au.maturity_score, au.risk_score, au.end_date,
                     o.name AS organization_name
              FROM audits au
              INNER JOIN organizations o ON o.id = au.organization_id
-             WHERE au.status = "closed" AND au.maturity_score IS NOT NULL
+             {$where}
              ORDER BY au.end_date DESC
-             LIMIT :lim'
+             LIMIT :lim"
         );
+        if ($organizationId !== null) {
+            $statement->bindValue(':organization_id', $organizationId, \PDO::PARAM_INT);
+        }
         $statement->bindValue(':lim', $limit, \PDO::PARAM_INT);
         $statement->execute();
         return $statement->fetchAll();
     }
 
     /** Madurez promedio por dominio (para heatmap/gráfico del dashboard). */
-    public function maturityByDomain(): array
+    public function maturityByDomain(?int $organizationId = null): array
     {
-        return $this->db->query(
-            'SELECT d.name AS domain_name, d.code AS domain_code,
+        $where = '';
+        $params = [];
+        if ($organizationId !== null) {
+            $where = 'WHERE au.organization_id = :organization_id';
+            $params['organization_id'] = $organizationId;
+        }
+
+        $statement = $this->db->prepare(
+            "SELECT d.name AS domain_name, d.code AS domain_code,
                     ROUND(AVG(acm.maturity_level), 2) AS avg_maturity
              FROM audit_control_maturity acm
              INNER JOIN iso_controls c ON c.id = acm.control_id
              INNER JOIN iso_domains d ON d.id = c.domain_id
+             INNER JOIN audits au ON au.id = acm.audit_id
+             {$where}
              GROUP BY d.id
-             ORDER BY d.code ASC'
-        )->fetchAll();
+             ORDER BY d.code ASC"
+        );
+        $statement->execute($params);
+        return $statement->fetchAll();
     }
 
     /** Cantidad de preguntas activas y cuántas ya tienen respuesta guardada. */

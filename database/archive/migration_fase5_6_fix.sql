@@ -1,3 +1,6 @@
+-- OBSOLETO: ya incorporado en sql/schema.sql (dba_name/risk_c-i-d/audit_control_maturity).
+-- Se conserva solo como referencia historica, NO importar.
+
 -- ============================================================
 -- Migración Fase 5/6 – Corrección de brechas
 -- ============================================================

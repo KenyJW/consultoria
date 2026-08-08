@@ -3,9 +3,11 @@
 # ============================================================
 
 # --- Evidencias subidas durante las pruebas (NO deben ir al repo) ---
-# Se ignora el contenido pero se conserva la carpeta con un .gitkeep.
+# Se ignora el contenido pero se conserva la carpeta con un .gitkeep, y el
+# .htaccess que bloquea el acceso HTTP directo a los archivos subidos.
 public/uploads/evidences/*
 !public/uploads/evidences/.gitkeep
+!public/uploads/evidences/.htaccess
 
 # --- Archivos de configuracion con credenciales locales ---
 # Si en algun momento creas una copia local con tu password real,

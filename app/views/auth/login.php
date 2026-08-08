@@ -21,6 +21,9 @@
             </div>
             <button class="btn btn-primary w-100" type="submit">Iniciar sesion</button>
         </form>
-        <p class="text-muted small mb-0 mt-4">Usuario inicial: admin@datasolutionscr.net / Admin123*</p>
+        <p class="text-muted small mb-0 mt-4">
+            ¿Su organización aún no tiene cuenta? <a href="<?= BASE_URL ?>/register">Regístrese aquí</a>
+        </p>
+        <p class="text-muted small mb-0 mt-1">Usuario inicial: admin@datasolutionscr.net / Admin123*</p>
     </section>
 </main>

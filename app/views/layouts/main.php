@@ -5,6 +5,7 @@ use App\Core\Flash;
 
 $currentUser   = Auth::user();
 $flashMessages = Flash::all();
+$scopedOrgId   = Auth::organizationId();
 ?>
 <!doctype html>
 <html lang="es">
@@ -25,9 +26,13 @@ $flashMessages = Flash::all();
             </div>
             <nav class="nav flex-column gap-1">
                 <a class="nav-link" href="<?= BASE_URL ?>/dashboard">Dashboard</a>
-                <a class="nav-link" href="<?= BASE_URL ?>/organizations">Organizaciones</a>
+                <?php if ($scopedOrgId !== null): ?>
+                    <a class="nav-link" href="<?= BASE_URL ?>/organizations/show?id=<?= $scopedOrgId ?>">Mi organización</a>
+                <?php else: ?>
+                    <a class="nav-link" href="<?= BASE_URL ?>/organizations">Organizaciones</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/users">Usuarios</a>
+                <?php endif; ?>
                 <a class="nav-link" href="<?= BASE_URL ?>/areas">Áreas</a>
-                <a class="nav-link" href="<?= BASE_URL ?>/users">Usuarios</a>
                 <a class="nav-link" href="<?= BASE_URL ?>/domains">Dominios ISO</a>
                 <a class="nav-link" href="<?= BASE_URL ?>/controls">Controles</a>
                 <a class="nav-link" href="<?= BASE_URL ?>/questions">Preguntas</a>

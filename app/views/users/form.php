@@ -23,7 +23,7 @@
                     <input class="form-control" id="email" name="email" type="email" value="<?= e($_SESSION['_old']['email'] ?? $user['email'] ?? '') ?>" required>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label" for="password">ContraseÃ±a</label>
+                    <label class="form-label" for="password">Contraseña</label>
                     <input class="form-control" id="password" name="password" type="password" <?= $user ? '' : 'required' ?>>
                 </div>
                 <div class="col-md-4">

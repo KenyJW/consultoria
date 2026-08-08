@@ -1,0 +1,12 @@
+# Bloquea el acceso HTTP directo a los archivos de evidencia subidos.
+# La aplicacion sigue pudiendo leerlos/escribirlos por PHP (esta regla solo
+# aplica a peticiones HTTP directas de un navegador), y las descarga a
+# traves de AuditController::downloadEvidence(), que valida que el usuario
+# pertenezca a la organizacion dueña de la evidencia antes de entregarla.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

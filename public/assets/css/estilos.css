@@ -518,12 +518,195 @@ a { color: inherit; }
 
 .pie__marca { color: var(--papel); font-weight: 500; }
 
+/* ---------- Pasos (Cómo funciona) ---------- */
+
+.pasos {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  counter-reset: paso;
+  border-top: 1px solid var(--linea);
+  border-left: 1px solid var(--linea);
+}
+
+.paso {
+  padding: 30px 26px 32px;
+  border-right: 1px solid var(--linea);
+  border-bottom: 1px solid var(--linea);
+  position: relative;
+}
+
+.paso__num {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--ambar);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1.5px solid var(--ambar);
+  border-radius: 50%;
+  margin-bottom: 18px;
+}
+
+.paso h3 {
+  font-family: var(--serif);
+  font-size: 17.5px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.paso p {
+  color: var(--gris);
+  font-size: 14.5px;
+  margin: 0;
+}
+
+/* ---------- Preguntas frecuentes ---------- */
+
+.faq {
+  max-width: 760px;
+}
+
+.faq__item {
+  border-bottom: 1px solid var(--linea);
+}
+
+.faq__item summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 4px;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.faq__item summary::-webkit-details-marker { display: none; }
+
+.faq__signo {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--ambar);
+  border-radius: 50%;
+  position: relative;
+}
+
+.faq__signo::before, .faq__signo::after {
+  content: "";
+  position: absolute;
+  background: var(--ambar);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.faq__signo::before { width: 10px; height: 1.5px; }
+.faq__signo::after   { width: 1.5px; height: 10px; transition: transform 0.2s; }
+
+.faq__item[open] .faq__signo::after { transform: translate(-50%, -50%) rotate(90deg) scaleX(0); }
+
+.faq__item p {
+  color: var(--gris);
+  font-size: 15px;
+  max-width: 62ch;
+  margin: 0 0 24px;
+  padding: 0 4px;
+}
+
+/* ---------- Contacto directo (WhatsApp / Telegram) ---------- */
+
+.contacto-directo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.enlace-social {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(245, 243, 239, 0.34);
+  color: var(--papel);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  transition: border-color 0.18s, background 0.18s, transform 0.15s;
+}
+
+.enlace-social:hover {
+  border-color: var(--papel);
+  transform: translateY(-2px);
+}
+
+.enlace-social svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+.enlace-social--whatsapp:hover { background: rgba(62, 142, 110, 0.16); }
+.enlace-social--telegram:hover { background: rgba(127, 168, 219, 0.16); }
+
+/* Iconos de contacto en el pie */
+.pie__social {
+  display: flex;
+  gap: 14px;
+}
+
+.pie__social a {
+  display: inline-flex;
+  color: rgba(245, 243, 239, 0.55);
+  transition: color 0.18s;
+}
+
+.pie__social a:hover { color: var(--ambar); }
+.pie__social svg { width: 18px; height: 18px; }
+
+/* Botón flotante de WhatsApp */
+.whatsapp-flotante {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--verde);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(16, 24, 40, 0.28);
+  transition: transform 0.18s;
+}
+
+.whatsapp-flotante:hover { transform: scale(1.08); }
+.whatsapp-flotante svg { width: 27px; height: 27px; }
+
+/* ---------- Aparicion al hacer scroll ---------- */
+
+.aparece {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.aparece.visible {
+  opacity: 1;
+  transform: none;
+}
+
 /* ---------- Adaptable ---------- */
 
 @media (max-width: 940px) {
   .hero__interior { grid-template-columns: 1fr; gap: 46px; }
   .equipo { grid-template-columns: repeat(2, 1fr); }
   .cinta__interior { grid-template-columns: 1fr; gap: 18px; }
+  .pasos { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 680px) {
@@ -532,11 +715,15 @@ a { color: inherit; }
   .seccion { padding: 60px 0; }
   .rejilla { grid-template-columns: 1fr; }
   .equipo { grid-template-columns: 1fr; }
-  .nav { gap: 18px; }
-  .nav a { font-size: 13.5px; }
+  .pasos { grid-template-columns: 1fr; }
+  .nav { gap: 14px; }
+  .nav a { font-size: 13px; }
   .log__lineas { font-size: 12px; }
   .log__lineas li { grid-template-columns: 44px 88px 1fr; gap: 7px; padding: 7px 13px; }
   .cierre__interior { text-align: left; }
+  .contacto-directo { justify-content: flex-start; }
+  .whatsapp-flotante { right: 16px; bottom: 16px; width: 50px; height: 50px; }
+  .whatsapp-flotante svg { width: 24px; height: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

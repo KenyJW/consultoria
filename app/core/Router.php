@@ -25,9 +25,20 @@ final class Router
     public function dispatch(string $method, string $uri): void
     {
         $path = parse_url($uri, PHP_URL_PATH) ?: '/';
+
+        // El front controller siempre vive en .../public/index.php, asi que
+        // dirname(SCRIPT_NAME) siempre trae el sufijo "/public". Eso sirve
+        // para recortar el prefijo cuando se accede con la ruta larga
+        // (/sitio/public/login), pero NO cuando se accede con la ruta corta
+        // (/sitio/login) que habilita el .htaccess de la raiz: en ese caso
+        // hay que recortar la base del sitio SIN "/public".
         $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+        $siteBase  = preg_replace('#/public$#', '', $scriptDir);
+
         if ($scriptDir !== '/' && str_starts_with($path, $scriptDir)) {
             $path = substr($path, strlen($scriptDir)) ?: '/';
+        } elseif ($siteBase !== '' && str_starts_with($path, $siteBase)) {
+            $path = substr($path, strlen($siteBase)) ?: '/';
         }
 
         $path = $this->normalize($path);

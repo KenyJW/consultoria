@@ -1,3 +1,6 @@
+-- OBSOLETO: ya incorporado en sql/schema.sql (tabla recommendations).
+-- Se conserva solo como referencia historica, NO importar.
+
 -- ============================================================
 -- Valor Agregado – Seguimiento de Recomendaciones
 -- ============================================================

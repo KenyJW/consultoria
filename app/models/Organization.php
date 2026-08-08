@@ -75,6 +75,13 @@ final class Organization extends BaseModel
         return $statement->execute($data);
     }
 
+    /** Igual que create(), pero devuelve el id nuevo (usado por el autoregistro publico). */
+    public function createAndGetId(array $data): int
+    {
+        $this->create($data);
+        return (int) $this->db->lastInsertId();
+    }
+
     public function update(int $id, array $data): bool
     {
         $data['id'] = $id;

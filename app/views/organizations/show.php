@@ -10,11 +10,11 @@
                 <div><?= e($organization['email']) ?></div>
             </div>
             <div class="col-md-8">
-                <div class="text-muted">DirecciÃ³n</div>
+                <div class="text-muted">Dirección</div>
                 <div><?= e($organization['address']) ?></div>
             </div>
             <div class="col-md-4">
-                <div class="text-muted">Ãreas asociadas</div>
+                <div class="text-muted">Áreas asociadas</div>
                 <div><?= (int) $organization['areas_count'] ?></div>
             </div>
             <div class="col-md-4">
@@ -26,7 +26,7 @@
                 <div><?= e(date('d/m/Y H:i', strtotime($organization['created_at']))) ?></div>
             </div>
             <div class="col-md-4">
-                <div class="text-muted">Ãšltima actualizaciÃ³n</div>
+                <div class="text-muted">�?ltima actualización</div>
                 <div><?= e(date('d/m/Y H:i', strtotime($organization['updated_at']))) ?></div>
             </div>
         </div>

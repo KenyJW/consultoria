@@ -1,3 +1,6 @@
+-- OBSOLETO: ya incorporado en sql/schema.sql (pesos y CID reales de C1-C15).
+-- Se conserva solo como referencia historica, NO importar.
+
 -- ============================================================
 -- Actualización de peso y relación CID por control (C1–C15)
 -- según la justificación del documento de análisis (sección 4)

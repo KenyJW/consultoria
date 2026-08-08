@@ -87,6 +87,23 @@ final class User extends BaseModel
         return $statement->execute($params);
     }
 
+    /** Alta de usuario via autoregistro publico (/register): rol auditor, ligado a su propia organizacion. */
+    public function createScoped(string $name, string $email, string $password, int $organizationId): int
+    {
+        $statement = $this->db->prepare(
+            "INSERT INTO users (name, email, password, role, status, organization_id)
+             VALUES (:name, :email, :password, 'auditor', 'active', :organization_id)"
+        );
+        $statement->execute([
+            'name' => $name,
+            'email' => $email,
+            'password' => password_hash($password, PASSWORD_DEFAULT),
+            'organization_id' => $organizationId,
+        ]);
+
+        return (int) $this->db->lastInsertId();
+    }
+
     public function delete(int $id): bool
     {
         $statement = $this->db->prepare('UPDATE users SET status = "inactive" WHERE id = :id');

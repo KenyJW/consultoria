@@ -13,6 +13,10 @@
                 <div class="text-muted">Dominio</div>
                 <div><?= e(($control['domain_code'] ?? '') . ' ' . ($control['domain_name'] ?? '-')) ?></div>
             </div>
+            <div class="col-md-3">
+                <div class="text-muted">Referencia ISO/IEC 27002:2022</div>
+                <div><?= e($control['iso_reference'] ?? '—') ?></div>
+            </div>
             <div class="col-md-6">
                 <div class="text-muted">Objetivo</div>
                 <div><?= nl2br(e($control['objective'] ?? '')) ?></div>

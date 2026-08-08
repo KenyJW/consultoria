@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Csrf;
 use App\Core\Flash;
@@ -14,20 +15,23 @@ use App\Models\Recommendation;
 final class RecommendationController extends Controller
 {
     private Recommendation $model;
+    private Audit $audits;
 
     public function __construct()
     {
-        $this->model = new Recommendation();
+        $this->model  = new Recommendation();
+        $this->audits = new Audit();
     }
 
-    /** Lista global de recomendaciones pendientes / en progreso. */
+    /** Lista de recomendaciones pendientes / en progreso (global para consultora, propia si esta restringido). */
     public function index(): void
     {
         Middleware::auth();
+        $orgId = Auth::organizationId();
         $this->view('recommendations/index', [
             'title'   => 'Seguimiento de recomendaciones',
-            'items'   => $this->model->allPending(),
-            'counts'  => $this->model->countByStatus(),
+            'items'   => $this->model->allPending($orgId),
+            'counts'  => $this->model->countByStatus($orgId),
         ]);
     }
 
@@ -36,8 +40,9 @@ final class RecommendationController extends Controller
     {
         Middleware::auth();
         $auditId = (int) ($_GET['audit_id'] ?? 0);
-        $audit   = (new Audit())->find($auditId);
+        $audit   = $this->audits->find($auditId);
         if (! $audit) { Flash::error('Auditoria no encontrada.'); $this->redirect('/audits'); }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
 
         $this->view('recommendations/audit', [
             'title'    => 'Recomendaciones: ' . $audit['name'],
@@ -54,8 +59,12 @@ final class RecommendationController extends Controller
             Flash::error('Sesion expirada.'); $this->redirect('/recommendations');
         }
 
-        $auditId  = (int) ($_POST['audit_id'] ?? 0);
-        $dueDate  = trim((string) ($_POST['due_date'] ?? ''));
+        $auditId = (int) ($_POST['audit_id'] ?? 0);
+        $audit   = $this->audits->find($auditId);
+        if (! $audit) { Flash::error('Auditoria no encontrada.'); $this->redirect('/recommendations'); }
+        Middleware::ownsOrganization((int) $audit['organization_id']);
+
+        $dueDate = trim((string) ($_POST['due_date'] ?? ''));
 
         $this->model->create([
             'audit_id'    => $auditId,
@@ -78,9 +87,10 @@ final class RecommendationController extends Controller
             Flash::error('Sesion expirada.'); $this->redirect('/recommendations');
         }
 
-        $id      = (int) ($_POST['id'] ?? 0);
-        $rec     = $this->model->find($id);
+        $id  = (int) ($_POST['id'] ?? 0);
+        $rec = $this->model->find($id);
         if (! $rec) { Flash::error('Recomendacion no encontrada.'); $this->redirect('/recommendations'); }
+        Middleware::ownsOrganization((int) $rec['audit_organization_id']);
 
         $dueDate = trim((string) ($_POST['due_date'] ?? ''));
         $status  = $_POST['status'] ?? 'pending';
@@ -100,13 +110,14 @@ final class RecommendationController extends Controller
 
     public function delete(): void
     {
-        Middleware::roles(['admin']);
+        Middleware::roles(['admin', 'auditor']);
         if (! Csrf::validate($_POST['_csrf'] ?? null)) {
             Flash::error('Sesion expirada.'); $this->redirect('/recommendations');
         }
         $id  = (int) ($_POST['id'] ?? 0);
         $rec = $this->model->find($id);
         if ($rec) {
+            Middleware::ownsOrganization((int) $rec['audit_organization_id']);
             $this->model->delete($id);
             Flash::success('Recomendacion eliminada.');
             $this->redirect('/recommendations/audit?audit_id=' . $rec['audit_id']);

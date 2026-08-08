@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Middleware;
 use App\Models\Audit;
@@ -14,6 +15,11 @@ final class ComparisonController extends Controller
     public function index(): void
     {
         Middleware::auth();
+        $scopedOrgId = Auth::organizationId();
+        if ($scopedOrgId !== null) {
+            $this->redirect('/comparison?organization_id=' . $scopedOrgId);
+        }
+
         $this->view('comparison/index', [
             'title'         => 'Comparación histórica',
             'organizations' => (new Organization())->activeOptions(),
@@ -26,7 +32,11 @@ final class ComparisonController extends Controller
     public function show(): void
     {
         Middleware::auth();
-        $orgId  = (int) ($_GET['organization_id'] ?? 0);
+        $scopedOrgId = Auth::organizationId();
+        $orgId = $scopedOrgId ?? (int) ($_GET['organization_id'] ?? 0);
+        if ($orgId > 0) {
+            Middleware::ownsOrganization($orgId);
+        }
         $audits = [];
         $chartData = null;
 
@@ -86,9 +96,13 @@ final class ComparisonController extends Controller
             }
         }
 
+        $organizations = $scopedOrgId !== null
+            ? array_values(array_filter((new Organization())->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
+            : (new Organization())->activeOptions();
+
         $this->view('comparison/index', [
             'title'         => 'Comparación histórica',
-            'organizations' => (new Organization())->activeOptions(),
+            'organizations' => $organizations,
             'orgId'         => $orgId,
             'audits'        => $audits,
             'chartData'     => $chartData,

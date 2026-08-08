@@ -145,6 +145,7 @@ final class IsoControlController extends Controller
             'title' => trim((string) ($_POST['title'] ?? '')),
             'description' => trim((string) ($_POST['description'] ?? '')),
             'objective' => trim((string) ($_POST['objective'] ?? '')),
+            'iso_reference' => trim((string) ($_POST['iso_reference'] ?? '')) ?: null,
             'weight' => $weight,
             'confidentiality' => isset($_POST['confidentiality']) ? 1 : 0,
             'integrity' => isset($_POST['integrity']) ? 1 : 0,

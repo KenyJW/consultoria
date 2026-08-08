@@ -1,7 +1,7 @@
-﻿document.addEventListener('DOMContentLoaded', () => {
+?document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-confirm]').forEach((form) => {
         form.addEventListener('submit', (event) => {
-            if (!confirm(form.dataset.confirm || 'Â¿Desea continuar?')) {
+            if (!confirm(form.dataset.confirm || '¿Desea continuar?')) {
                 event.preventDefault();
             }
         });

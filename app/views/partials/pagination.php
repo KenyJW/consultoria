@@ -4,7 +4,7 @@
     $current = (int) $pagination['page'];
     $pages = (int) $pagination['pages'];
     ?>
-    <nav aria-label="PaginaciÃ³n">
+    <nav aria-label="Paginación">
         <ul class="pagination justify-content-end mb-0">
             <?php for ($i = 1; $i <= $pages; $i++): ?>
                 <?php $query['page'] = $i; ?>

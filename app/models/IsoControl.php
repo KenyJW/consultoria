@@ -85,8 +85,8 @@ final class IsoControl extends BaseModel
     public function create(array $data): bool
     {
         $statement = $this->db->prepare(
-            'INSERT INTO iso_controls (domain_id, code, title, description, objective, weight, confidentiality, integrity, availability, status)
-             VALUES (:domain_id, :code, :title, :description, :objective, :weight, :confidentiality, :integrity, :availability, :status)'
+            'INSERT INTO iso_controls (domain_id, code, title, description, objective, weight, confidentiality, integrity, availability, iso_reference, status)
+             VALUES (:domain_id, :code, :title, :description, :objective, :weight, :confidentiality, :integrity, :availability, :iso_reference, :status)'
         );
         return $statement->execute($data);
     }
@@ -98,7 +98,7 @@ final class IsoControl extends BaseModel
             'UPDATE iso_controls
              SET domain_id = :domain_id, code = :code, title = :title, description = :description,
                  objective = :objective, weight = :weight, confidentiality = :confidentiality,
-                 integrity = :integrity, availability = :availability, status = :status
+                 integrity = :integrity, availability = :availability, iso_reference = :iso_reference, status = :status
              WHERE id = :id'
         );
         return $statement->execute($data);
