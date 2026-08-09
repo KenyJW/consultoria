@@ -8,6 +8,7 @@ use App\Core\Controller;
 use App\Core\Csrf;
 use App\Core\Flash;
 use App\Core\Middleware;
+use App\Models\ActivityLog;
 use App\Models\Audit;
 use App\Models\IsoControl;
 use App\Models\Recommendation;
@@ -16,11 +17,13 @@ final class RecommendationController extends Controller
 {
     private Recommendation $model;
     private Audit $audits;
+    private ActivityLog $activityLog;
 
     public function __construct()
     {
-        $this->model  = new Recommendation();
-        $this->audits = new Audit();
+        $this->model       = new Recommendation();
+        $this->audits      = new Audit();
+        $this->activityLog = new ActivityLog();
     }
 
     /** Lista de recomendaciones pendientes / en progreso (global para consultora, propia si esta restringido). */
@@ -28,14 +31,21 @@ final class RecommendationController extends Controller
     {
         Middleware::auth();
         $orgId = Auth::organizationId();
+        $allowedOrgIds = Middleware::assignedOrganizationIds();
         $this->view('recommendations/index', [
             'title'   => 'Seguimiento de recomendaciones',
-            'items'   => $this->model->allPending($orgId),
-            'counts'  => $this->model->countByStatus($orgId),
+            'items'   => $this->model->allPending($orgId, $allowedOrgIds),
+            'counts'  => $this->model->countByStatus($orgId, $allowedOrgIds),
         ]);
     }
 
-    /** Recomendaciones de una auditoría específica. */
+    /**
+     * Recomendaciones de una auditoría específica. Si llega desde el
+     * reporte (sección "Controles con menor madurez" / "mayor riesgo")
+     * con control_id, suggested_maturity y suggested_risk en la query,
+     * precarga el formulario de nueva recomendación para ese control en
+     * vez de dejarlo en blanco.
+     */
     public function forAudit(): void
     {
         Middleware::auth();
@@ -44,11 +54,31 @@ final class RecommendationController extends Controller
         if (! $audit) { Flash::error('Auditoria no encontrada.'); $this->redirect('/audits'); }
         Middleware::ownsOrganization((int) $audit['organization_id']);
 
+        $preselectControlId  = (int) ($_GET['control_id'] ?? 0);
+        $suggestedDescription = null;
+        if ($preselectControlId > 0) {
+            $control = (new IsoControl())->find($preselectControlId);
+            if ($control) {
+                $maturity = $_GET['suggested_maturity'] ?? null;
+                $risk     = $_GET['suggested_risk'] ?? null;
+                $suggestedDescription = sprintf(
+                    'El control %s — %s presenta un nivel de madurez de %s/5%s tras esta auditoría. '
+                    . 'Se recomienda reforzar los procedimientos relacionados para elevar su nivel de implementación.',
+                    $control['code'],
+                    $control['title'],
+                    $maturity !== null ? number_format((float) $maturity, 0) : '?',
+                    $risk !== null ? ' y una exposición al riesgo de ' . number_format((float) $risk, 1) . '%' : ''
+                );
+            }
+        }
+
         $this->view('recommendations/audit', [
-            'title'    => 'Recomendaciones: ' . $audit['name'],
-            'audit'    => $audit,
-            'items'    => $this->model->forAudit($auditId),
-            'controls' => (new IsoControl())->activeOptions(),
+            'title'                 => 'Recomendaciones: ' . $audit['name'],
+            'audit'                 => $audit,
+            'items'                 => $this->model->forAudit($auditId),
+            'controls'              => (new IsoControl())->activeOptions(),
+            'preselectControlId'    => $preselectControlId,
+            'suggestedDescription'  => $suggestedDescription,
         ]);
     }
 
@@ -103,6 +133,18 @@ final class RecommendationController extends Controller
             'status'      => $status,
             'notes'       => trim((string) ($_POST['notes'] ?? '')) ?: null,
         ]);
+
+        if ($status !== $rec['status']) {
+            $this->activityLog->record(
+                (int) $rec['audit_id'],
+                (int) (Auth::user()['id'] ?? 0),
+                'recommendation_status_changed',
+                sprintf(
+                    'Cambió el estado de la recomendación sobre %s de "%s" a "%s".',
+                    $rec['control_code'], $rec['status'], $status
+                )
+            );
+        }
 
         Flash::success('Recomendacion actualizada.');
         $this->redirect('/recommendations/audit?audit_id=' . $rec['audit_id']);

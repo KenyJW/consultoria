@@ -9,17 +9,24 @@ final class Organization extends BaseModel
 {
     private array $sortable = ['name', 'email', 'status', 'created_at'];
 
-    public function paginateList(string $search, string $sort, string $direction, int $page, int $perPage = 10): array
+    /** @param int[]|null $allowedOrgIds Si no es null, restringe a esas organizaciones (auditor con alcance limitado). */
+    public function paginateList(string $search, string $sort, string $direction, int $page, int $perPage = 10, ?array $allowedOrgIds = null): array
     {
         $sort = in_array($sort, $this->sortable, true) ? $sort : 'created_at';
         $direction = strtolower($direction) === 'asc' ? 'ASC' : 'DESC';
         $params = [];
-        $where = '';
+        $whereParts = [];
 
         if ($search !== '') {
-            $where = 'WHERE o.name LIKE :search OR o.email LIKE :search OR o.address LIKE :search';
+            $whereParts[] = '(o.name LIKE :search OR o.email LIKE :search OR o.address LIKE :search)';
             $params[':search'] = '%' . $search . '%';
         }
+        if ($allowedOrgIds !== null) {
+            $whereParts[] = $allowedOrgIds === []
+                ? '1 = 0'
+                : 'o.id IN (' . implode(',', array_map('intval', $allowedOrgIds)) . ')';
+        }
+        $where = $whereParts ? 'WHERE ' . implode(' AND ', $whereParts) : '';
 
         $sql = "SELECT o.*, COUNT(a.id) AS areas_count
                 FROM organizations o

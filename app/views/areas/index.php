@@ -1,4 +1,5 @@
-<?php use App\Core\Csrf; ?>
+<?php use App\Core\Auth; use App\Core\Csrf; ?>
+<?php $canManage = in_array(Auth::user()['role'] ?? null, ['admin', 'auditor'], true); ?>
 <form class="row g-2 mb-3" method="get" action="<?= BASE_URL ?>/areas">
     <div class="col-md-4">
         <input class="form-control" name="q" value="<?= e($search) ?>" placeholder="Buscar por área u organización">
@@ -29,9 +30,11 @@
         <button class="btn btn-outline-primary" type="submit">Buscar</button>
     </div>
 </form>
+<?php if ($canManage): ?>
 <div class="d-flex justify-content-end mb-3">
     <a class="btn btn-primary" href="<?= BASE_URL ?>/areas/create">Nueva área</a>
 </div>
+<?php endif; ?>
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <div class="table-responsive">
@@ -54,13 +57,15 @@
                         <td><?= e(date('d/m/Y', strtotime($area['created_at']))) ?></td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-secondary" href="<?= BASE_URL ?>/areas/show?id=<?= (int) $area['id'] ?>">Ver</a>
-                            <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/areas/edit?id=<?= (int) $area['id'] ?>">Editar</a>
-                            <form class="d-inline" method="post" action="<?= BASE_URL ?>/areas/toggle" data-confirm="¿Cambiar estado de esta área?">
-                                <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
-                                <input type="hidden" name="id" value="<?= (int) $area['id'] ?>">
-                                <input type="hidden" name="status" value="<?= $area['status'] === 'active' ? 'inactive' : 'active' ?>">
-                                <button class="btn btn-sm btn-outline-warning" type="submit"><?= $area['status'] === 'active' ? 'Inactivar' : 'Activar' ?></button>
-                            </form>
+                            <?php if ($canManage): ?>
+                                <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/areas/edit?id=<?= (int) $area['id'] ?>">Editar</a>
+                                <form class="d-inline" method="post" action="<?= BASE_URL ?>/areas/toggle" data-confirm="¿Cambiar estado de esta área?">
+                                    <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
+                                    <input type="hidden" name="id" value="<?= (int) $area['id'] ?>">
+                                    <input type="hidden" name="status" value="<?= $area['status'] === 'active' ? 'inactive' : 'active' ?>">
+                                    <button class="btn btn-sm btn-outline-warning" type="submit"><?= $area['status'] === 'active' ? 'Inactivar' : 'Activar' ?></button>
+                                </form>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

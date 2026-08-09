@@ -83,14 +83,14 @@ final class User extends BaseModel
         return (int) $statement->fetchColumn() > 0;
     }
 
-    public function create(array $data): bool
+    public function create(array $data): int
     {
         $statement = $this->db->prepare(
             'INSERT INTO users (name, email, password, role, status, organization_id)
              VALUES (:name, :email, :password, :role, :status, :organization_id)'
         );
 
-        return $statement->execute([
+        $statement->execute([
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => password_hash($data['password'], PASSWORD_DEFAULT),
@@ -98,6 +98,8 @@ final class User extends BaseModel
             'status' => $data['status'],
             'organization_id' => $data['organization_id'] ?? null,
         ]);
+
+        return (int) $this->db->lastInsertId();
     }
 
     public function update(int $id, array $data): bool

@@ -34,10 +34,12 @@ $scopedOrgId   = Auth::organizationId();
                     <?php endif; ?>
                 <?php else: ?>
                     <a class="nav-link" href="<?= BASE_URL ?>/organizations">Organizaciones</a>
-                    <a class="nav-link" href="<?= BASE_URL ?>/users">Usuarios</a>
+                    <?php if ($rol === 'admin'): ?>
+                        <a class="nav-link" href="<?= BASE_URL ?>/users">Usuarios</a>
+                    <?php endif; ?>
                 <?php endif; ?>
                 <a class="nav-link" href="<?= BASE_URL ?>/areas">Áreas</a>
-                <?php if ($scopedOrgId === null): ?>
+                <?php if ($rol === 'admin'): ?>
                     <a class="nav-link" href="<?= BASE_URL ?>/domains">Dominios ISO</a>
                     <a class="nav-link" href="<?= BASE_URL ?>/controls">Controles</a>
                     <a class="nav-link" href="<?= BASE_URL ?>/questions">Preguntas</a>

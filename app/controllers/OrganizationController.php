@@ -33,10 +33,11 @@ final class OrganizationController extends Controller
         $sort = (string) ($_GET['sort'] ?? 'created_at');
         $direction = (string) ($_GET['direction'] ?? 'desc');
         $page = (int) ($_GET['page'] ?? 1);
+        $allowedOrgIds = Middleware::assignedOrganizationIds();
 
         $this->view('organizations/index', [
             'title' => 'Organizaciones',
-            'pagination' => $this->organizations->paginateList($search, $sort, $direction, $page),
+            'pagination' => $this->organizations->paginateList($search, $sort, $direction, $page, 10, $allowedOrgIds),
             'search' => $search,
             'sort' => $sort,
             'direction' => $direction,

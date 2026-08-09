@@ -59,8 +59,24 @@
                             <?php endforeach; ?>
                         </select>
                         <div class="form-text">
-                            Sin organización = auditor/administrador de la consultora, se puede asignar a cualquier empresa.
-                            Con organización = queda restringido a ver y trabajar solo esa empresa.
+                            Sin organización = personal de la consultora. Si además el rol es "Auditor", solo podrá
+                            trabajar con las empresas que marque abajo como asignadas (el administrador no tiene esta
+                            restricción). Con organización = queda restringido a ver y trabajar solo esa empresa.
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Empresas asignadas <span class="text-muted">(solo aplica si el rol es "Auditor" y no tiene organización propia)</span></label>
+                        <div class="row row-cols-2 row-cols-md-4 g-1 border rounded p-2">
+                            <?php foreach ($organizations as $organization): ?>
+                                <div class="col">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="assigned_organizations[]"
+                                               id="org_<?= (int) $organization['id'] ?>" value="<?= (int) $organization['id'] ?>"
+                                               <?= in_array((int) $organization['id'], $assignedOrgIds, true) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small" for="org_<?= (int) $organization['id'] ?>"><?= e($organization['name']) ?></label>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                 <?php endif; ?>

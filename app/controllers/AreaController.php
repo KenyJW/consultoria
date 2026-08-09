@@ -10,23 +10,21 @@ use App\Core\Flash;
 use App\Core\Middleware;
 use App\Core\Validator;
 use App\Models\Area;
-use App\Models\Organization;
 
 final class AreaController extends Controller
 {
     private Area $areas;
-    private Organization $organizations;
 
     public function __construct()
     {
         $this->areas = new Area();
-        $this->organizations = new Organization();
     }
 
     public function index(): void
     {
         Middleware::auth();
         $scopedOrgId = Auth::organizationId();
+        $allowedOrgIds = Middleware::assignedOrganizationIds();
         $search = trim((string) ($_GET['q'] ?? ''));
         $organizationId = $scopedOrgId ?? (int) ($_GET['organization_id'] ?? 0);
         $sort = (string) ($_GET['sort'] ?? 'created_at');
@@ -35,10 +33,8 @@ final class AreaController extends Controller
 
         $this->view('areas/index', [
             'title' => 'Areas',
-            'pagination' => $this->areas->paginateList($search, $organizationId, $sort, $direction, $page),
-            'organizations' => $scopedOrgId !== null
-                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
-                : $this->organizations->activeOptions(),
+            'pagination' => $this->areas->paginateList($search, $organizationId, $sort, $direction, $page, 10, $scopedOrgId === null ? $allowedOrgIds : null),
+            'organizations' => Middleware::visibleOrganizations(),
             'search' => $search,
             'organizationId' => $organizationId,
             'sort' => $sort,
@@ -51,13 +47,10 @@ final class AreaController extends Controller
     public function create(): void
     {
         Middleware::roles(['admin', 'auditor']);
-        $scopedOrgId = Auth::organizationId();
         $this->view('areas/form', [
             'title' => 'Nueva area',
             'area' => null,
-            'organizations' => $scopedOrgId !== null
-                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
-                : $this->organizations->activeOptions(),
+            'organizations' => Middleware::visibleOrganizations(),
             'action' => '/areas/store',
         ]);
     }
@@ -99,13 +92,10 @@ final class AreaController extends Controller
         }
         Middleware::ownsOrganization((int) $area['organization_id']);
 
-        $scopedOrgId = Auth::organizationId();
         $this->view('areas/form', [
             'title' => 'Editar area',
             'area' => $area,
-            'organizations' => $scopedOrgId !== null
-                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
-                : $this->organizations->activeOptions(),
+            'organizations' => Middleware::visibleOrganizations(),
             'action' => '/areas/update',
         ]);
     }
@@ -166,6 +156,12 @@ final class AreaController extends Controller
         $scopedOrgId = Auth::organizationId();
         if ($scopedOrgId !== null) {
             $data['organization_id'] = $scopedOrgId;
+        } else {
+            $allowed = Middleware::assignedOrganizationIds();
+            if ($allowed !== null && ! in_array($data['organization_id'], $allowed, true)) {
+                Flash::error('No tiene esa organizacion asignada.');
+                $this->redirect($failureRedirect);
+            }
         }
 
         $validator = (new Validator())

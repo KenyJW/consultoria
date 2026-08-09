@@ -192,8 +192,11 @@ Navegador → public/index.php → Router → Controller → Model → View → 
 | `audits` | Auditorías realizadas |
 | `responses` | Respuestas (sí/no/na) por pregunta en cada auditoría |
 | `evidences` | Archivos adjuntos vinculados a respuestas |
-| `audit_control_maturity` | Nivel de madurez asignado por control en cada auditoría |
+| `audit_control_maturity` | Nivel de madurez por control en cada auditoría (recalculado automáticamente desde `responses.maturity_level`, no editado directamente por el auditor) |
 | `recommendations` | Recomendaciones de mejora derivadas de auditorías |
+| `question_maturity_scale` | Explicación por pregunta de qué representa cada nivel de madurez (0-5) |
+| `activity_log` | Bitácora de cambios: quién cerró/reabrió/canceló una auditoría, cambió el estado de una recomendación o subió/eliminó una evidencia, y cuándo |
+| `auditor_organizations` | Qué organizaciones cliente puede trabajar cada auditor de la consultora (`users.role = 'auditor'` sin organización propia) |
 
 ### Usuario inicial
 
@@ -212,7 +215,7 @@ role:     admin
 - **Sesiones:** iniciadas con `session_regenerate_id(true)` al autenticarse.
 - **Consultas SQL:** 100% con PDO y sentencias preparadas (sin concatenación de entrada de usuario).
 - **Control de acceso:** middleware verifica autenticación y rol antes de cada ruta protegida.
-- **Aislamiento por organización:** un usuario autoregistrado (`users.organization_id` no nulo) solo puede ver/gestionar auditorías, áreas, recomendaciones y evidencias de su propia organización (`Middleware::ownsOrganization()`); el personal de la consultora (`organization_id = NULL`) no tiene esa restricción.
+- **Aislamiento por organización:** un usuario autoregistrado (`users.organization_id` no nulo) solo puede ver/gestionar auditorías, áreas, recomendaciones y evidencias de su propia organización (`Middleware::ownsOrganization()`). El personal de la consultora (`organization_id = NULL`) se divide en dos casos: un `admin` (o un `viewer` global) no tiene restricción; un `auditor` global solo puede ver/tocar las organizaciones que un admin le haya asignado en `auditor_organizations` (`Middleware::assignedOrganizationIds()` / `Middleware::visibleOrganizations()`) — si no tiene ninguna asignada, no ve ninguna organización, auditoría, ni comparación histórica de terceros. Esto evita que cualquier auditor de la firma tenga acceso a todos los clientes por defecto, replicando la barrera de confidencialidad entre cuentas que se espera de una consultora de auditoría real.
 - **Subida de archivos:** se valida tipo MIME y se almacena con nombre generado (no el original). El acceso HTTP directo a `public/uploads/evidences/` está bloqueado por `.htaccess` (`Require all denied`); las evidencias solo se descargan a través de `GET /audits/evidence?id=`, que valida la organización dueña antes de entregar el archivo.
 
 ---
@@ -277,12 +280,31 @@ risk_global = (risk_C + risk_I + risk_D) / 3
 
 ## 10. Migraciones adicionales
 
-No aplica. `sql/schema.sql` es el **único** script necesario, tanto para instalaciones
-nuevas como para reconstruir el entorno desde cero: ya incluye las columnas y tablas
-que antes se agregaban con migraciones separadas por fase (`objective`/`weight`/
-`confidentiality`/`integrity`/`availability` en `iso_controls`, `dba_name` y
-`risk_c`/`risk_i`/`risk_d` en `audits`, las tablas `audit_control_maturity` y
-`recommendations`), y los pesos/CID definitivos de C1–C15.
+Para instalaciones **nuevas**, `sql/schema.sql` es el único script necesario: ya
+incluye todas las columnas y tablas (`objective`/`weight`/`confidentiality`/
+`integrity`/`availability` en `iso_controls`, `dba_name` y `risk_c`/`risk_i`/
+`risk_d` en `audits`, las tablas `audit_control_maturity`, `recommendations`,
+`question_maturity_scale`, `activity_log` y `auditor_organizations`), y el
+catálogo semilla (7 dominios, 15 controles y 75 preguntas) **específico de
+administración de bases de datos**, con pesos, relación CID y objetivo ya
+definidos.
+
+Si ya tenías una base de datos creada con una versión anterior del catálogo
+(controles genéricos de seguridad organizacional) y quieres conservar tus
+organizaciones/auditorías/usuarios, hay dos scripts opcionales en `sql/` que
+actualizan en sitio sin perder datos:
+
+- `sql/actualizar_catalogo_administracion_bd.sql` — reemplaza el texto de
+  dominios, controles (incluye el `objective`, antes vacío), preguntas y
+  escala de madurez por el catálogo de administración de bases de datos,
+  sin tocar auditorías/respuestas/recomendaciones ya guardadas.
+- `sql/agregar_bitacora_cambios.sql` — crea únicamente la tabla `activity_log`
+  si tu base de datos es anterior a la incorporación de la bitácora de cambios.
+- `sql/agregar_asignacion_auditores.sql` — crea únicamente la tabla
+  `auditor_organizations` si tu base de datos es anterior a la restricción de
+  auditores por organización asignada. Los auditores globales que ya existan
+  quedan sin ninguna organización asignada hasta que un admin se la asigne
+  desde Usuarios > Editar.
 
 Los scripts antiguos se conservan solo como referencia histórica en
 `database/archive/` y `sql/archive/` — **no deben importarse**, su contenido ya
@@ -319,3 +341,11 @@ El reporte ejecutivo (`GET /audits/report`) y el dashboard (`GET /dashboard`) en
 | Exposición al riesgo (C, I, D) | Reporte — sección 3, calculada en `MaturityCalculator::calculate()` |
 
 Adicionalmente, `ComparisonController` (`GET /comparison`) implementa la evolución de indicadores, madurez global, riesgo por dimensión y madurez por dominio entre dos auditorías, permitiendo el seguimiento histórico mencionado en la introducción del enunciado.
+
+### Valor agregado (funcionalidades no exigidas por el enunciado)
+
+- **Recomendaciones de mejora con seguimiento** (`RecommendationController`): responsable, fecha límite y estado por control, con un botón "Generar recomendación" en las secciones 5 y 6 del reporte que precarga el formulario a partir del control con menor madurez o mayor riesgo, en vez de obligar al auditor a volver a escribirlo todo desde cero.
+- **Comparación histórica** entre auditorías de una misma organización (`ComparisonController`).
+- **Autoregistro y autoevaluación** de organizaciones (`RegisterController`), con aislamiento multi-tenant por `organization_id` (`Middleware::ownsOrganization`).
+- **Bitácora de cambios** (`activity_log` / `ActivityLog`): registra quién cerró/reabrió/canceló una auditoría, cambió el estado de una recomendación o subió/eliminó una evidencia, visible en el detalle de cada auditoría.
+- **Distinción entre auditoría de consultora y autoevaluación**: el listado de auditorías, el detalle y el reporte ejecutivo etiquetan si la auditoría la realizó personal de la consultora (`users.organization_id IS NULL`) o es una autoevaluación de la propia empresa, para no diluir el valor probatorio del reporte frente a terceros (`audit_kind_label()` en `app/core/helpers.php`).

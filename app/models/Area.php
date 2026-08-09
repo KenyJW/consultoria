@@ -9,7 +9,8 @@ final class Area extends BaseModel
 {
     private array $sortable = ['name', 'organization_name', 'status', 'created_at'];
 
-    public function paginateList(string $search, int $organizationId, string $sort, string $direction, int $page, int $perPage = 10): array
+    /** @param int[]|null $allowedOrgIds Si no es null, restringe a esas organizaciones (auditor con alcance limitado). */
+    public function paginateList(string $search, int $organizationId, string $sort, string $direction, int $page, int $perPage = 10, ?array $allowedOrgIds = null): array
     {
         $sortMap = [
             'name' => 'a.name',
@@ -30,6 +31,12 @@ final class Area extends BaseModel
         if ($organizationId > 0) {
             $whereParts[] = 'a.organization_id = :organization_id';
             $params[':organization_id'] = $organizationId;
+        }
+
+        if ($allowedOrgIds !== null) {
+            $whereParts[] = $allowedOrgIds === []
+                ? '1 = 0'
+                : 'a.organization_id IN (' . implode(',', array_map('intval', $allowedOrgIds)) . ')';
         }
 
         $where = $whereParts ? 'WHERE ' . implode(' AND ', $whereParts) : '';

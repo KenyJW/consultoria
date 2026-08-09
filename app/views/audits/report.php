@@ -48,6 +48,14 @@ $avgCompliance  = $totalControls > 0
     <div class="col-6"><strong>Organización:</strong> <?= e($audit['organization_name']) ?></div>
     <div class="col-6"><strong>Área evaluada:</strong> <?= e($audit['area_name']) ?></div>
     <div class="col-6"><strong>Auditor:</strong> <?= e($audit['auditor_name']) ?></div>
+    <?php $auditorOrgId = $audit['auditor_organization_id'] !== null ? (int) $audit['auditor_organization_id'] : null; ?>
+    <div class="col-6">
+        <strong>Tipo de evaluación:</strong>
+        <span class="badge <?= audit_kind_badge_class($auditorOrgId) ?>"><?= e(audit_kind_label($auditorOrgId)) ?></span>
+        <?php if ($auditorOrgId !== null): ?>
+            <span class="text-muted small">(autoevaluación interna, sin verificación de un auditor externo independiente)</span>
+        <?php endif; ?>
+    </div>
     <div class="col-6"><strong>DBA responsable:</strong> <?= e($audit['dba_name'] ?? '—') ?></div>
     <div class="col-3"><strong>Inicio:</strong> <?= e(date('d/m/Y', strtotime($audit['start_date']))) ?></div>
     <div class="col-3"><strong>Cierre:</strong> <?= $audit['end_date'] ? e(date('d/m/Y', strtotime($audit['end_date']))) : '—' ?></div>
@@ -233,7 +241,7 @@ $avgCompliance  = $totalControls > 0
 <h2 class="h6 fw-bold mb-2">5. Controles con menor nivel de madurez</h2>
 <table class="table table-sm table-bordered mb-4">
     <thead class="table-light">
-        <tr><th>Control</th><th class="text-center">Madurez</th><th class="text-center">Cumplimiento</th></tr>
+        <tr><th>Control</th><th class="text-center">Madurez</th><th class="text-center">Cumplimiento</th><th class="no-print"></th></tr>
     </thead>
     <tbody>
         <?php foreach ($lowestMaturity as $cid => $bc): ?>
@@ -245,6 +253,12 @@ $avgCompliance  = $totalControls > 0
                     </span>
                 </td>
                 <td class="text-center"><?= $bc['compliance'] ?>%</td>
+                <td class="no-print text-center">
+                    <a class="btn btn-sm btn-outline-primary" target="_blank"
+                       href="<?= BASE_URL ?>/recommendations/audit?audit_id=<?= (int) $audit['id'] ?>&control_id=<?= (int) $cid ?>&suggested_maturity=<?= e((string) $bc['maturity']) ?>&suggested_risk=<?= e((string) $bc['risk']) ?>">
+                        Generar recomendación
+                    </a>
+                </td>
             </tr>
         <?php endforeach; ?>
     </tbody>
@@ -254,7 +268,7 @@ $avgCompliance  = $totalControls > 0
 <h2 class="h6 fw-bold mb-2">6. Controles con mayor exposición al riesgo</h2>
 <table class="table table-sm table-bordered mb-4">
     <thead class="table-light">
-        <tr><th>Control</th><th class="text-center">Riesgo</th><th class="text-center">Madurez</th></tr>
+        <tr><th>Control</th><th class="text-center">Riesgo</th><th class="text-center">Madurez</th><th class="no-print"></th></tr>
     </thead>
     <tbody>
         <?php foreach ($highestRisk as $cid => $bc): ?>
@@ -266,6 +280,12 @@ $avgCompliance  = $totalControls > 0
                     </span>
                 </td>
                 <td class="text-center"><?= $bc['maturity'] ?>/5</td>
+                <td class="no-print text-center">
+                    <a class="btn btn-sm btn-outline-primary" target="_blank"
+                       href="<?= BASE_URL ?>/recommendations/audit?audit_id=<?= (int) $audit['id'] ?>&control_id=<?= (int) $cid ?>&suggested_maturity=<?= e((string) $bc['maturity']) ?>&suggested_risk=<?= e((string) $bc['risk']) ?>">
+                        Generar recomendación
+                    </a>
+                </td>
             </tr>
         <?php endforeach; ?>
     </tbody>

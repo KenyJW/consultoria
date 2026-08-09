@@ -1,7 +1,8 @@
-<?php use App\Core\Csrf; ?>
+<?php use App\Core\Auth; use App\Core\Csrf; ?>
 <?php
 $statusLabels = ['draft' => 'Borrador', 'in_progress' => 'En progreso', 'closed' => 'Cerrada', 'cancelled' => 'Cancelada'];
 $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 'success', 'cancelled' => 'dark'];
+$canManage = in_array(Auth::user()['role'] ?? null, ['admin', 'auditor'], true);
 ?>
 <form class="row g-2 mb-3" method="get" action="<?= BASE_URL ?>/audits">
     <div class="col-md-3">
@@ -42,9 +43,11 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
         <button class="btn btn-outline-primary" type="submit">Buscar</button>
     </div>
 </form>
+<?php if ($canManage): ?>
 <div class="d-flex justify-content-end mb-3">
     <a class="btn btn-primary" href="<?= BASE_URL ?>/audits/create">Nueva auditoria</a>
 </div>
+<?php endif; ?>
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <div class="table-responsive">
@@ -55,6 +58,7 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
                     <th>Organizacion</th>
                     <th>Area</th>
                     <th>Auditor</th>
+                    <th>Tipo</th>
                     <th>Inicio</th>
                     <th>Estado</th>
                     <th class="text-end">Acciones</th>
@@ -67,11 +71,17 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
                         <td><?= e($audit['organization_name']) ?></td>
                         <td><?= e($audit['area_name']) ?></td>
                         <td><?= e($audit['auditor_name']) ?></td>
+                        <?php $auditorOrgId = $audit['auditor_organization_id'] !== null ? (int) $audit['auditor_organization_id'] : null; ?>
+                        <td>
+                            <span class="badge <?= audit_kind_badge_class($auditorOrgId) ?>">
+                                <?= e(audit_kind_label($auditorOrgId)) ?>
+                            </span>
+                        </td>
                         <td><?= e(date('d/m/Y', strtotime($audit['start_date']))) ?></td>
                         <td><span class="badge text-bg-<?= $statusBadge[$audit['status']] ?? 'secondary' ?>"><?= e($statusLabels[$audit['status']] ?? $audit['status']) ?></span></td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-secondary" href="<?= BASE_URL ?>/audits/show?id=<?= (int) $audit['id'] ?>">Ver</a>
-                            <?php if (! in_array($audit['status'], ['closed', 'cancelled'], true)): ?>
+                            <?php if ($canManage && ! in_array($audit['status'], ['closed', 'cancelled'], true)): ?>
                                 <a class="btn btn-sm btn-outline-success" href="<?= BASE_URL ?>/audits/run?id=<?= (int) $audit['id'] ?>">Responder</a>
                                 <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/audits/edit?id=<?= (int) $audit['id'] ?>">Editar</a>
                             <?php endif; ?>
@@ -79,7 +89,7 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($pagination['items'] === []): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-4">No hay auditorias registradas.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">No hay auditorias registradas.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

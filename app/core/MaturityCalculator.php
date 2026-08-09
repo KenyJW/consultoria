@@ -11,8 +11,13 @@ namespace App\Core;
  *   No (no)       → no cumple
  *   No aplica (na)→ excluida del cálculo
  *
- * NIVEL DE MADUREZ POR CONTROL (asignado manualmente por el auditor, escala 0-5):
- *   Se almacena en audit_control_maturity.maturity_level
+ * NIVEL DE MADUREZ POR CONTROL (escala 0-5):
+ *   El auditor califica cada PREGUNTA (responses.maturity_level) según la
+ *   evidencia observada; el nivel del control se recalcula automáticamente
+ *   como el promedio ponderado (por peso de pregunta) de esas respuestas
+ *   (ver AuditControlMaturity::recalculateForAudit(), invocado desde
+ *   AuditController::save()) y se almacena en audit_control_maturity.
+ *   maturity_level. El auditor nunca califica el control directamente.
  *
  * NIVEL DE CUMPLIMIENTO POR CONTROL:
  *   compliance = preguntas_yes / (preguntas_yes + preguntas_no)  [excluye na]

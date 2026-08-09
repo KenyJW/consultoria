@@ -10,6 +10,7 @@ use App\Core\ErrorHandler;
 use App\Core\Flash;
 use App\Core\Middleware;
 use App\Core\Validator;
+use App\Models\AuditorOrganization;
 use App\Models\Organization;
 use App\Models\User;
 
@@ -24,10 +25,12 @@ use App\Models\User;
 final class UserController extends Controller
 {
     private User $users;
+    private AuditorOrganization $auditorOrganizations;
 
     public function __construct()
     {
         $this->users = new User();
+        $this->auditorOrganizations = new AuditorOrganization();
     }
 
     public function index(): void
@@ -52,6 +55,7 @@ final class UserController extends Controller
             'action' => '/users/store',
             'scoped' => Auth::organizationId() !== null,
             'organizations' => (new Organization())->activeOptions(),
+            'assignedOrgIds' => [],
         ]);
     }
 
@@ -65,7 +69,8 @@ final class UserController extends Controller
             $this->redirect('/users/create');
         }
 
-        $this->users->create($data);
+        $newId = $this->users->create($data);
+        $this->syncAuditorOrganizations($newId, $data);
         Flash::success('Usuario creado correctamente.');
         $this->redirect('/users');
     }
@@ -87,6 +92,7 @@ final class UserController extends Controller
             'action' => '/users/update',
             'scoped' => Auth::organizationId() !== null,
             'organizations' => (new Organization())->activeOptions(),
+            'assignedOrgIds' => $this->auditorOrganizations->organizationIdsForUser($id),
         ]);
     }
 
@@ -106,8 +112,26 @@ final class UserController extends Controller
         }
 
         $this->users->update($id, $data);
+        $this->syncAuditorOrganizations($id, $data);
         Flash::success('Usuario actualizado correctamente.');
         $this->redirect('/users');
+    }
+
+    /**
+     * Guarda que organizaciones puede trabajar un auditor global (rol
+     * auditor, sin organizacion propia). Para cualquier otro caso (admin,
+     * viewer, o un auditor ligado a una organizacion) no aplica: se limpia
+     * cualquier asignacion previa para no dejar datos huerfanos si el rol
+     * o la organizacion del usuario cambiaron.
+     */
+    private function syncAuditorOrganizations(int $userId, array $data): void
+    {
+        if ($data['role'] !== 'auditor' || $data['organization_id'] !== null) {
+            $this->auditorOrganizations->syncForUser($userId, []);
+            return;
+        }
+        $organizationIds = array_map('intval', (array) ($_POST['assigned_organizations'] ?? []));
+        $this->auditorOrganizations->syncForUser($userId, $organizationIds);
     }
 
     public function destroy(): void

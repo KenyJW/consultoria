@@ -20,14 +20,21 @@ final class Recommendation extends BaseModel
         return $statement->fetchAll();
     }
 
-    /** @param int|null $organizationId Si se indica, limita a recomendaciones de auditorias de esa organizacion. */
-    public function allPending(?int $organizationId = null): array
+    /**
+     * @param int|null $organizationId Si se indica, limita a recomendaciones de auditorias de esa organizacion.
+     * @param int[]|null $allowedOrgIds Si no es null (y no se indicó $organizationId), restringe a esas organizaciones.
+     */
+    public function allPending(?int $organizationId = null, ?array $allowedOrgIds = null): array
     {
         $where = 'WHERE r.status != "done"';
         $params = [];
         if ($organizationId !== null) {
             $where .= ' AND au.organization_id = :organization_id';
             $params['organization_id'] = $organizationId;
+        } elseif ($allowedOrgIds !== null) {
+            $where .= $allowedOrgIds === []
+                ? ' AND 1 = 0'
+                : ' AND au.organization_id IN (' . implode(',', array_map('intval', $allowedOrgIds)) . ')';
         }
 
         $statement = $this->db->prepare(
@@ -44,13 +51,21 @@ final class Recommendation extends BaseModel
         return $statement->fetchAll();
     }
 
-    public function countByStatus(?int $organizationId = null): array
+    /**
+     * @param int|null $organizationId Si se indica, limita a recomendaciones de auditorias de esa organizacion.
+     * @param int[]|null $allowedOrgIds Si no es null (y no se indicó $organizationId), restringe a esas organizaciones.
+     */
+    public function countByStatus(?int $organizationId = null, ?array $allowedOrgIds = null): array
     {
         $where = '';
         $params = [];
         if ($organizationId !== null) {
             $where = 'INNER JOIN audits au ON au.id = r.audit_id WHERE au.organization_id = :organization_id';
             $params['organization_id'] = $organizationId;
+        } elseif ($allowedOrgIds !== null) {
+            $where = $allowedOrgIds === []
+                ? 'INNER JOIN audits au ON au.id = r.audit_id WHERE 1 = 0'
+                : 'INNER JOIN audits au ON au.id = r.audit_id WHERE au.organization_id IN (' . implode(',', array_map('intval', $allowedOrgIds)) . ')';
         }
 
         $statement = $this->db->prepare(

@@ -9,7 +9,8 @@ final class Audit extends BaseModel
 {
     private array $sortable = ['name', 'organization_name', 'status', 'start_date', 'created_at'];
 
-    public function paginateList(string $search, int $organizationId, string $status, string $sort, string $direction, int $page, int $perPage = 10): array
+    /** @param int[]|null $allowedOrgIds Si no es null, restringe a esas organizaciones (auditor con alcance limitado). */
+    public function paginateList(string $search, int $organizationId, string $status, string $sort, string $direction, int $page, int $perPage = 10, ?array $allowedOrgIds = null): array
     {
         $sortMap = [
             'name' => 'au.name',
@@ -35,9 +36,15 @@ final class Audit extends BaseModel
             $whereParts[] = 'au.status = :status';
             $params[':status'] = $status;
         }
+        if ($allowedOrgIds !== null) {
+            $whereParts[] = $allowedOrgIds === []
+                ? '1 = 0'
+                : 'au.organization_id IN (' . implode(',', array_map('intval', $allowedOrgIds)) . ')';
+        }
 
         $where = $whereParts ? 'WHERE ' . implode(' AND ', $whereParts) : '';
-        $sql = "SELECT au.*, o.name AS organization_name, a.name AS area_name, u.name AS auditor_name
+        $sql = "SELECT au.*, o.name AS organization_name, a.name AS area_name, u.name AS auditor_name,
+                       u.organization_id AS auditor_organization_id
                 FROM audits au
                 INNER JOIN organizations o ON o.id = au.organization_id
                 INNER JOIN areas a ON a.id = au.area_id
@@ -55,7 +62,8 @@ final class Audit extends BaseModel
     public function find(int $id): ?array
     {
         $statement = $this->db->prepare(
-            'SELECT au.*, o.name AS organization_name, a.name AS area_name, u.name AS auditor_name
+            'SELECT au.*, o.name AS organization_name, a.name AS area_name, u.name AS auditor_name,
+                    u.organization_id AS auditor_organization_id
              FROM audits au
              INNER JOIN organizations o ON o.id = au.organization_id
              INNER JOIN areas a ON a.id = au.area_id
@@ -166,14 +174,19 @@ final class Audit extends BaseModel
     /**
      * Estadísticas para el dashboard.
      * @param int|null $organizationId Si se indica, limita a esa organización (usuarios autoregistrados).
+     * @param int[]|null $allowedOrgIds Si no es null (y no se indicó $organizationId), restringe a esas organizaciones.
      */
-    public function stats(?int $organizationId = null): array
+    public function stats(?int $organizationId = null, ?array $allowedOrgIds = null): array
     {
         $where = '';
         $params = [];
         if ($organizationId !== null) {
             $where = 'WHERE organization_id = :organization_id';
             $params['organization_id'] = $organizationId;
+        } elseif ($allowedOrgIds !== null) {
+            $where = $allowedOrgIds === []
+                ? 'WHERE 1 = 0'
+                : 'WHERE organization_id IN (' . implode(',', array_map('intval', $allowedOrgIds)) . ')';
         }
 
         $statement = $this->db->prepare(

@@ -1,8 +1,10 @@
-<?php use App\Core\Csrf;
+<?php use App\Core\Auth;
+use App\Core\Csrf;
 use App\Core\MaturityCalculator; ?>
 <?php
 $statusLabels = ['draft' => 'Borrador', 'in_progress' => 'En progreso', 'closed' => 'Cerrada', 'cancelled' => 'Cancelada'];
 $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 'success', 'cancelled' => 'dark'];
+$canManage = in_array(Auth::user()['role'] ?? null, ['admin', 'auditor'], true);
 ?>
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
@@ -18,6 +20,11 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
             <div class="col-md-3">
                 <div class="text-muted">Auditor</div>
                 <div><?= e($audit['auditor_name']) ?></div>
+            </div>
+            <?php $auditorOrgId = $audit['auditor_organization_id'] !== null ? (int) $audit['auditor_organization_id'] : null; ?>
+            <div class="col-md-2">
+                <div class="text-muted">Tipo</div>
+                <span class="badge <?= audit_kind_badge_class($auditorOrgId) ?>"><?= e(audit_kind_label($auditorOrgId)) ?></span>
             </div>
             <div class="col-md-4">
                 <div class="text-muted">Organizacion</div>
@@ -68,24 +75,30 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
         <div class="d-flex justify-content-end gap-2 mt-4">
             <a class="btn btn-outline-secondary" href="<?= BASE_URL ?>/audits">Volver</a>
             <?php if (in_array($audit['status'], ['draft', 'in_progress'], true)): ?>
-                <a class="btn btn-primary" href="<?= BASE_URL ?>/audits/run?id=<?= (int) $audit['id'] ?>">Continuar cuestionario</a>
-                <form method="post" action="<?= BASE_URL ?>/audits/cancel" data-confirm="Cancelar esta auditoria? Podra reabrirla luego, pero quedara marcada como cancelada.">
-                    <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
-                    <input type="hidden" name="id" value="<?= (int) $audit['id'] ?>">
-                    <button class="btn btn-outline-danger" type="submit">Cancelar auditoria</button>
-                </form>
+                <?php if ($canManage): ?>
+                    <a class="btn btn-primary" href="<?= BASE_URL ?>/audits/run?id=<?= (int) $audit['id'] ?>">Continuar cuestionario</a>
+                    <form method="post" action="<?= BASE_URL ?>/audits/cancel" data-confirm="Cancelar esta auditoria? Podra reabrirla luego, pero quedara marcada como cancelada.">
+                        <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
+                        <input type="hidden" name="id" value="<?= (int) $audit['id'] ?>">
+                        <button class="btn btn-outline-danger" type="submit">Cancelar auditoria</button>
+                    </form>
+                <?php endif; ?>
             <?php elseif ($audit['status'] === 'cancelled'): ?>
-                <form method="post" action="<?= BASE_URL ?>/audits/reopen" data-confirm="Reabrir esta auditoria para continuar el cuestionario?">
-                    <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
-                    <input type="hidden" name="id" value="<?= (int) $audit['id'] ?>">
-                    <button class="btn btn-outline-warning" type="submit">Reabrir</button>
-                </form>
+                <?php if ($canManage): ?>
+                    <form method="post" action="<?= BASE_URL ?>/audits/reopen" data-confirm="Reabrir esta auditoria para continuar el cuestionario?">
+                        <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
+                        <input type="hidden" name="id" value="<?= (int) $audit['id'] ?>">
+                        <button class="btn btn-outline-warning" type="submit">Reabrir</button>
+                    </form>
+                <?php endif; ?>
             <?php else: ?>
-                <form method="post" action="<?= BASE_URL ?>/audits/reopen" data-confirm="Reabrir esta auditoria para edicion?">
-                    <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
-                    <input type="hidden" name="id" value="<?= (int) $audit['id'] ?>">
-                    <button class="btn btn-outline-warning" type="submit">Reabrir</button>
-                </form>
+                <?php if ($canManage): ?>
+                    <form method="post" action="<?= BASE_URL ?>/audits/reopen" data-confirm="Reabrir esta auditoria para edicion?">
+                        <input type="hidden" name="_csrf" value="<?= Csrf::token() ?>">
+                        <input type="hidden" name="id" value="<?= (int) $audit['id'] ?>">
+                        <button class="btn btn-outline-warning" type="submit">Reabrir</button>
+                    </form>
+                <?php endif; ?>
                 <a class="btn btn-outline-primary" href="<?= BASE_URL ?>/audits/report?id=<?= (int) $audit['id'] ?>" target="_blank">Ver reporte</a>
                 <a class="btn btn-outline-secondary" href="<?= BASE_URL ?>/recommendations/audit?audit_id=<?= (int) $audit['id'] ?>">Recomendaciones</a>
                 <a class="btn btn-outline-info" href="<?= BASE_URL ?>/comparison?organization_id=<?= (int) $audit['organization_id'] ?>">Comparar historial</a>
@@ -93,3 +106,20 @@ $statusBadge = ['draft' => 'secondary', 'in_progress' => 'warning', 'closed' => 
         </div>
     </div>
 </div>
+
+<?php if (! empty($activity)): ?>
+<div class="card border-0 shadow-sm mt-3">
+    <div class="card-header bg-white fw-semibold">Bitácora de cambios</div>
+    <div class="card-body">
+        <ul class="list-unstyled small mb-0">
+            <?php foreach ($activity as $entry): ?>
+                <li class="border-bottom py-2">
+                    <span class="text-muted"><?= e(date('d/m/Y H:i', strtotime($entry['created_at']))) ?></span>
+                    — <strong><?= e($entry['user_name'] ?? 'Usuario eliminado') ?></strong>:
+                    <?= e($entry['description']) ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+</div>
+<?php endif; ?>

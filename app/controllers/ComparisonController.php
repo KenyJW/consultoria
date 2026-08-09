@@ -8,7 +8,6 @@ use App\Core\Controller;
 use App\Core\Middleware;
 use App\Models\Audit;
 use App\Models\AuditControlMaturity;
-use App\Models\Organization;
 
 final class ComparisonController extends Controller
 {
@@ -22,7 +21,7 @@ final class ComparisonController extends Controller
 
         $this->view('comparison/index', [
             'title'         => 'Comparación histórica',
-            'organizations' => (new Organization())->activeOptions(),
+            'organizations' => Middleware::visibleOrganizations(),
             'orgId'         => 0,
             'audits'        => [],
             'chartData'     => null,
@@ -96,13 +95,9 @@ final class ComparisonController extends Controller
             }
         }
 
-        $organizations = $scopedOrgId !== null
-            ? array_values(array_filter((new Organization())->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
-            : (new Organization())->activeOptions();
-
         $this->view('comparison/index', [
             'title'         => 'Comparación histórica',
-            'organizations' => $organizations,
+            'organizations' => Middleware::visibleOrganizations(),
             'orgId'         => $orgId,
             'audits'        => $audits,
             'chartData'     => $chartData,

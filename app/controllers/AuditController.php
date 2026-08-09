@@ -10,11 +10,11 @@ use App\Core\Flash;
 use App\Core\MaturityCalculator;
 use App\Core\Middleware;
 use App\Core\Validator;
+use App\Models\ActivityLog;
 use App\Models\Area;
 use App\Models\Audit;
 use App\Models\AuditControlMaturity;
 use App\Models\Evidence;
-use App\Models\Organization;
 use App\Models\QuestionMaturityScale;
 use App\Models\Response;
 use App\Models\User;
@@ -35,30 +35,31 @@ final class AuditController extends Controller
     ];
 
     private Audit $audits;
-    private Organization $organizations;
     private Area $areas;
     private User $users;
     private Response $responses;
     private Evidence $evidences;
     private AuditControlMaturity $controlMaturity;
     private QuestionMaturityScale $maturityScales;
+    private ActivityLog $activityLog;
 
     public function __construct()
     {
         $this->audits          = new Audit();
-        $this->organizations   = new Organization();
         $this->areas           = new Area();
         $this->users           = new User();
         $this->responses       = new Response();
         $this->evidences       = new Evidence();
         $this->controlMaturity = new AuditControlMaturity();
         $this->maturityScales  = new QuestionMaturityScale();
+        $this->activityLog     = new ActivityLog();
     }
 
     public function index(): void
     {
         Middleware::auth();
         $scopedOrgId    = Auth::organizationId();
+        $allowedOrgIds  = Middleware::assignedOrganizationIds();
         $search         = trim((string) ($_GET['q'] ?? ''));
         $organizationId = $scopedOrgId ?? (int) ($_GET['organization_id'] ?? 0);
         $status         = (string) ($_GET['status'] ?? '');
@@ -68,10 +69,8 @@ final class AuditController extends Controller
 
         $this->view('audits/index', [
             'title'          => 'Auditorias',
-            'pagination'     => $this->audits->paginateList($search, $organizationId, $status, $sort, $direction, $page),
-            'organizations'  => $scopedOrgId !== null
-                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
-                : $this->organizations->activeOptions(),
+            'pagination'     => $this->audits->paginateList($search, $organizationId, $status, $sort, $direction, $page, 10, $scopedOrgId === null ? $allowedOrgIds : null),
+            'organizations'  => Middleware::visibleOrganizations(),
             'search'         => $search,
             'organizationId' => $organizationId,
             'status'         => $status,
@@ -91,9 +90,7 @@ final class AuditController extends Controller
         $this->view('audits/form', [
             'title'         => 'Nueva auditoria',
             'audit'         => null,
-            'organizations' => $scopedOrgId !== null
-                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
-                : $this->organizations->activeOptions(),
+            'organizations' => Middleware::visibleOrganizations(),
             'auditors'      => $scopedOrgId !== null ? [$currentUser] : $this->users->auditors(),
             'action'        => '/audits/store',
         ]);
@@ -123,9 +120,7 @@ final class AuditController extends Controller
         $this->view('audits/form', [
             'title'         => 'Editar auditoria',
             'audit'         => $audit,
-            'organizations' => $scopedOrgId !== null
-                ? array_values(array_filter($this->organizations->activeOptions(), fn($o) => (int) $o['id'] === $scopedOrgId))
-                : $this->organizations->activeOptions(),
+            'organizations' => Middleware::visibleOrganizations(),
             'auditors'      => $scopedOrgId !== null ? [$currentUser] : $this->users->auditors(),
             'action'        => '/audits/update',
         ]);
@@ -158,6 +153,7 @@ final class AuditController extends Controller
             'title'    => 'Detalle de auditoria',
             'audit'    => $audit,
             'progress' => $this->audits->progress((int) $audit['id']),
+            'activity' => $this->activityLog->forAudit((int) $audit['id']),
         ]);
     }
 
@@ -165,6 +161,7 @@ final class AuditController extends Controller
     {
         Middleware::auth();
         $organizationId = Auth::organizationId() ?? (int) ($_GET['organization_id'] ?? 0);
+        Middleware::ownsOrganization($organizationId);
         $db             = \App\Core\Database::getConnection();
         $statement      = $db->prepare('SELECT id, name FROM areas WHERE organization_id = :oid AND status = "active" ORDER BY name ASC');
         $statement->execute(['oid' => $organizationId]);
@@ -263,6 +260,15 @@ final class AuditController extends Controller
                 $calc['risk_i'],
                 $calc['risk_d']
             );
+            $this->activityLog->record(
+                $auditId,
+                (int) (Auth::user()['id'] ?? 0),
+                'audit_closed',
+                sprintf(
+                    'Cerró la auditoría con madurez %.2f/5 y riesgo global %.2f%% (C: %.2f%% / I: %.2f%% / D: %.2f%%).',
+                    $calc['maturity_score'], $calc['risk_score'], $calc['risk_c'], $calc['risk_i'], $calc['risk_d']
+                )
+            );
             Flash::success(
                 'Auditoria finalizada. Madurez: ' . $calc['maturity_score'] . '/5 — ' .
                 'Riesgo global: ' . $calc['risk_score'] . '% ' .
@@ -291,7 +297,14 @@ final class AuditController extends Controller
         if (! $audit) { Flash::error('Auditoria no encontrada.'); $this->redirect('/audits'); }
         Middleware::ownsOrganization((int) $audit['organization_id']);
 
+        $previousStatus = $audit['status'];
         $this->audits->setStatus($id, 'in_progress');
+        $this->activityLog->record(
+            $id,
+            (int) (Auth::user()['id'] ?? 0),
+            'audit_reopened',
+            'Reabrió la auditoría para edición (estaba: ' . $previousStatus . ').'
+        );
         Flash::success('Auditoria reabierta para edicion.');
         $this->redirect('/audits/run?id=' . $id);
     }
@@ -311,6 +324,12 @@ final class AuditController extends Controller
         Middleware::ownsOrganization((int) $audit['organization_id']);
 
         $this->audits->setStatus($id, 'cancelled');
+        $this->activityLog->record(
+            $id,
+            (int) (Auth::user()['id'] ?? 0),
+            'audit_cancelled',
+            'Canceló la auditoría.'
+        );
         Flash::success('Auditoria cancelada. Puede reabrirla luego si lo necesita.');
         $this->redirect('/audits');
     }
@@ -370,6 +389,12 @@ final class AuditController extends Controller
             'mime_type'     => $mime,
             'size_bytes'    => (int) $file['size'],
         ]);
+        $this->activityLog->record(
+            $auditId,
+            (int) (Auth::user()['id'] ?? 0),
+            'evidence_uploaded',
+            'Subió la evidencia "' . substr((string) $file['name'], 0, 255) . '".'
+        );
 
         Flash::success('Evidencia cargada correctamente.');
         $this->redirect('/audits/run?id=' . $auditId);
@@ -395,6 +420,12 @@ final class AuditController extends Controller
             $path = BASE_PATH . '/public/uploads/evidences/' . $evidence['stored_name'];
             if (is_file($path)) { unlink($path); }
             $this->evidences->delete((int) $evidence['id']);
+            $this->activityLog->record(
+                $realAuditId,
+                (int) (Auth::user()['id'] ?? 0),
+                'evidence_deleted',
+                'Eliminó la evidencia "' . $evidence['original_name'] . '".'
+            );
             Flash::success('Evidencia eliminada.');
         }
         $this->redirect('/audits/run?id=' . $auditId);
@@ -529,8 +560,17 @@ final class AuditController extends Controller
     private function enforceOwnOrganization(int $organizationId, string $failureRedirect): void
     {
         $scopedOrgId = Auth::organizationId();
-        if ($scopedOrgId !== null && $organizationId !== $scopedOrgId) {
-            Flash::error('Solo puede crear auditorias para su propia organizacion.');
+        if ($scopedOrgId !== null) {
+            if ($organizationId !== $scopedOrgId) {
+                Flash::error('Solo puede crear auditorias para su propia organizacion.');
+                $this->redirect($failureRedirect);
+            }
+            return;
+        }
+
+        $allowed = Middleware::assignedOrganizationIds();
+        if ($allowed !== null && ! in_array($organizationId, $allowed, true)) {
+            Flash::error('No tiene esa organizacion asignada.');
             $this->redirect($failureRedirect);
         }
     }
