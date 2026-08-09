@@ -37,7 +37,13 @@ spl_autoload_register(static function (string $class): void {
     }
 
     $relativeClass = substr($class, strlen($prefix));
-    $file = BASE_PATH . '/app/' . str_replace('\\', '/', $relativeClass) . '.php';
+    $parts = explode('\\', $relativeClass);
+    // Las carpetas reales de app/ estan en minuscula (controllers, core, models)
+    // mientras que el namespace usa PascalCase (Controllers, Core, Models). En
+    // Windows (WAMP) el filesystem ignora mayusculas y esto pasa desapercibido,
+    // pero en el hosting Linux es sensible a mayusculas y el autoload fallaba.
+    $parts[0] = strtolower($parts[0]);
+    $file = BASE_PATH . '/app/' . implode('/', $parts) . '.php';
     if (is_file($file)) {
         require $file;
     }
