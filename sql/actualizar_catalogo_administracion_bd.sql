@@ -1,376 +1,146 @@
 -- ============================================================
---  Esquema consolidado — Sistema de Evaluacion de Riesgo ISO/IEC 27002
---  para Administracion de Bases de Datos
---  Un solo archivo: crea la base, todas las tablas (con las columnas
---  de objetivo/peso/CID que usa el codigo PHP) y los datos semilla
---  (7 dominios, 15 controles con objetivo/peso/relacion CID y 75
---  preguntas), todos especificos de administracion de bases de datos
---  (no controles genericos de seguridad organizacional), conforme al
---  alcance del enunciado EIF402: "El sistema estara orientado
---  exclusivamente a la evaluacion de controles asociados con la
---  administracion de bases de datos."
+--  Actualizacion de catalogo ISO a controles/preguntas
+--  especificos de administracion de bases de datos
 --
---  Import UNICO necesario: este archivo. Las migraciones sueltas que
---  existian antes en database/ quedaron archivadas en database/archive/
---  porque su contenido ya esta incorporado aqui.
+--  Uso: SOLO si ya tenias la base de datos "consultora_iso27002"
+--  creada con una version anterior de sql/schema.sql (la de
+--  controles genericos de seguridad organizacional) y quieres
+--  conservar las organizaciones/auditorias/usuarios que ya
+--  registraste, en vez de reimportar todo desde cero.
+--
+--  Este script actualiza EN SITIO los mismos codigos (D1-D7,
+--  C1-C15) y las mismas 75 preguntas (mismos id 1-75, en el
+--  mismo orden de insercion que el schema.sql original), por lo
+--  que no rompe las llaves foraneas de responses/audit_control_
+--  maturity/recommendations que ya existan. Las respuestas viejas
+--  seguiran asociadas a la pregunta correcta por posicion, pero su
+--  contenido (Si/No/madurez) fue capturado contra el enunciado
+--  ANTERIOR, asi que cualquier auditoria de prueba que ya hayas
+--  cerrado con el catalogo viejo conviene reabrirla y revisarla
+--  con las preguntas nuevas antes de usarla como evidencia real.
+--
+--  Si prefieres partir de cero, en vez de este script simplemente
+--  reimporta sql/schema.sql sobre una base de datos vacia.
 -- ============================================================
-
-CREATE DATABASE IF NOT EXISTS consultora_iso27002
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
 
 USE consultora_iso27002;
 
--- organization_id: NULL para el personal de la consultora (admin y auditores
--- asignados manualmente, que pueden trabajar cualquier organizacion). Se
--- llena solo cuando el usuario se autoregistra desde /register, y lo limita
--- a ver y gestionar unicamente esa organizacion (ver App\Core\Middleware::
--- ownsOrganization).
-CREATE TABLE users (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(120) NOT NULL,
-    email VARCHAR(160) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'auditor', 'viewer') NOT NULL DEFAULT 'auditor',
-    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-    organization_id INT UNSIGNED NULL,
-    last_login_at DATETIME NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
-
-CREATE TABLE organizations (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(180) NOT NULL,
-    address VARCHAR(255) NULL,
-    email VARCHAR(160) NULL,
-    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_organizations_name (name)
-) ENGINE=InnoDB;
-
-ALTER TABLE users
-    ADD CONSTRAINT fk_users_organization FOREIGN KEY (organization_id) REFERENCES organizations(id);
-
-CREATE TABLE areas (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    organization_id INT UNSIGNED NOT NULL,
-    name VARCHAR(160) NOT NULL,
-    description TEXT NULL,
-    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_areas_organization_name (organization_id, name),
-    CONSTRAINT fk_areas_organization FOREIGN KEY (organization_id) REFERENCES organizations(id)
-) ENGINE=InnoDB;
-
-CREATE TABLE iso_domains (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    code VARCHAR(30) NOT NULL UNIQUE,
-    name VARCHAR(180) NOT NULL,
-    description TEXT NULL,
-    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
-
--- iso_controls incluye desde el inicio objective/weight/CID: antes estas
--- columnas se agregaban con una migracion aparte (migration_fase3_4.sql)
--- que ademas tenia un bug: dejaba sin crear la columna "weight", pero el
--- codigo PHP (IsoControlController/IsoControl model) y el script de pesos
--- ya la necesitaban desde el primer INSERT/UPDATE.
-CREATE TABLE iso_controls (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    domain_id INT UNSIGNED NULL,
-    code VARCHAR(30) NOT NULL UNIQUE,
-    title VARCHAR(220) NOT NULL,
-    description TEXT NULL,
-    objective TEXT NULL,
-    weight DECIMAL(5,2) NOT NULL DEFAULT 1.00,
-    confidentiality TINYINT UNSIGNED NOT NULL DEFAULT 1,
-    integrity TINYINT UNSIGNED NOT NULL DEFAULT 1,
-    availability TINYINT UNSIGNED NOT NULL DEFAULT 1,
-    iso_reference VARCHAR(60) NULL,
-    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_iso_controls_domain FOREIGN KEY (domain_id) REFERENCES iso_domains(id)
-) ENGINE=InnoDB;
-
-CREATE TABLE questions (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    control_id INT UNSIGNED NOT NULL,
-    question TEXT NOT NULL,
-    weight DECIMAL(5,2) NOT NULL DEFAULT 1.00,
-    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_questions_control FOREIGN KEY (control_id) REFERENCES iso_controls(id)
-) ENGINE=InnoDB;
-
--- Explica, por pregunta, que representa cada nivel de madurez (0-5) al
--- responderla. Se siembra con texto especifico de administracion de bases
--- de datos para cada una de las 75 preguntas (no texto generico repetido).
-CREATE TABLE question_maturity_scale (
-    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    question_id INT UNSIGNED NOT NULL,
-    level       TINYINT UNSIGNED NOT NULL,
-    description TEXT NOT NULL,
-    UNIQUE KEY uq_qms (question_id, level),
-    CONSTRAINT fk_qms_question FOREIGN KEY (question_id) REFERENCES questions(id)
-) ENGINE=InnoDB;
-
-CREATE TABLE audits (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    organization_id INT UNSIGNED NOT NULL,
-    area_id INT UNSIGNED NOT NULL,
-    auditor_user_id INT UNSIGNED NOT NULL,
-    dba_name VARCHAR(160) NULL,
-    name VARCHAR(200) NOT NULL,
-    status ENUM('draft', 'in_progress', 'closed', 'cancelled') NOT NULL DEFAULT 'draft',
-    start_date DATE NOT NULL,
-    end_date DATE NULL,
-    maturity_score DECIMAL(5,2) NULL,
-    risk_score DECIMAL(5,2) NULL,
-    risk_c DECIMAL(5,2) NULL,
-    risk_i DECIMAL(5,2) NULL,
-    risk_d DECIMAL(5,2) NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_audits_organization FOREIGN KEY (organization_id) REFERENCES organizations(id),
-    CONSTRAINT fk_audits_area FOREIGN KEY (area_id) REFERENCES areas(id),
-    CONSTRAINT fk_audits_auditor_user FOREIGN KEY (auditor_user_id) REFERENCES users(id)
-) ENGINE=InnoDB;
-
-CREATE TABLE responses (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    audit_id INT UNSIGNED NOT NULL,
-    question_id INT UNSIGNED NOT NULL,
-    answer ENUM('yes','no','na') NULL,
-    maturity_level TINYINT UNSIGNED NULL,
-    justification TEXT NULL,
-    recommendation TEXT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_responses_audit FOREIGN KEY (audit_id) REFERENCES audits(id),
-    CONSTRAINT fk_responses_question FOREIGN KEY (question_id) REFERENCES questions(id),
-    CONSTRAINT uq_responses_audit_question UNIQUE (audit_id, question_id)
-) ENGINE=InnoDB;
-
-CREATE TABLE audit_control_maturity (
-    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    audit_id     INT UNSIGNED NOT NULL,
-    control_id   INT UNSIGNED NOT NULL,
-    maturity_level TINYINT UNSIGNED NOT NULL DEFAULT 0,
-    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_acm (audit_id, control_id),
-    CONSTRAINT fk_acm_audit   FOREIGN KEY (audit_id)   REFERENCES audits(id),
-    CONSTRAINT fk_acm_control FOREIGN KEY (control_id) REFERENCES iso_controls(id)
-) ENGINE=InnoDB;
-
-CREATE TABLE evidences (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    response_id INT UNSIGNED NOT NULL,
-    original_name VARCHAR(255) NOT NULL,
-    stored_name VARCHAR(255) NOT NULL,
-    mime_type VARCHAR(120) NOT NULL,
-    size_bytes INT UNSIGNED NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_evidences_response FOREIGN KEY (response_id) REFERENCES responses(id)
-) ENGINE=InnoDB;
-
-CREATE TABLE recommendations (
-    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    audit_id     INT UNSIGNED NOT NULL,
-    control_id   INT UNSIGNED NOT NULL,
-    description  TEXT NOT NULL,
-    responsible  VARCHAR(160) NULL,
-    due_date     DATE NULL,
-    status       ENUM('pending','in_progress','done') NOT NULL DEFAULT 'pending',
-    notes        TEXT NULL,
-    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_rec_audit   FOREIGN KEY (audit_id)   REFERENCES audits(id),
-    CONSTRAINT fk_rec_control FOREIGN KEY (control_id) REFERENCES iso_controls(id)
-) ENGINE=InnoDB;
-
--- Bitacora de cambios (audit trail): quien hizo que y cuando sobre acciones
--- sensibles (cerrar/reabrir/cancelar auditoria, cambios de estado de una
--- recomendacion, subida/eliminacion de evidencias). audit_id es NULL solo
--- si la accion no esta ligada a una auditoria especifica; user_id es NULL
--- si el usuario fue eliminado despues (los usuarios se desactivan, no se
--- borran, asi que en la practica esto no ocurre hoy).
-CREATE TABLE activity_log (
-    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    audit_id    INT UNSIGNED NULL,
-    user_id     INT UNSIGNED NULL,
-    action      VARCHAR(60) NOT NULL,
-    description TEXT NOT NULL,
-    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_activity_log_audit FOREIGN KEY (audit_id) REFERENCES audits(id),
-    CONSTRAINT fk_activity_log_user  FOREIGN KEY (user_id)  REFERENCES users(id)
-) ENGINE=InnoDB;
-
--- Que organizaciones cliente puede trabajar cada auditor de la consultora
--- (users.role = 'auditor' AND users.organization_id IS NULL). Sin fila aqui
--- para un auditor global = no tiene ninguna organizacion asignada todavia
--- (no vera ni podra tocar ninguna). Un admin no necesita filas aqui: nunca
--- esta restringido. Un usuario autoregistrado (users.organization_id NOT
--- NULL) tampoco: ya queda limitado a su propia organizacion via esa columna.
-CREATE TABLE auditor_organizations (
-    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id         INT UNSIGNED NOT NULL,
-    organization_id INT UNSIGNED NOT NULL,
-    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_auditor_organization (user_id, organization_id),
-    CONSTRAINT fk_ao_user FOREIGN KEY (user_id) REFERENCES users(id),
-    CONSTRAINT fk_ao_organization FOREIGN KEY (organization_id) REFERENCES organizations(id)
-) ENGINE=InnoDB;
-
-INSERT INTO users (name, email, password, role, status)
-VALUES (
-    'Administrador',
-    'admin@datasolutionscr.net',
-    'BOOTSTRAP_ADMIN_PASSWORD',
-    'admin',
-    'active'
-);
+-- ------------------------------------------------------------
+-- 1) Dominios (por codigo)
+-- ------------------------------------------------------------
+UPDATE iso_domains SET name = 'Gobierno y políticas de la base de datos', description = 'Políticas, roles y responsabilidades para la administración segura de bases de datos' WHERE code = 'D1';
+UPDATE iso_domains SET name = 'Gestión de activos de datos', description = 'Inventario, clasificación, propiedad y ciclo de vida de las bases de datos y su información' WHERE code = 'D2';
+UPDATE iso_domains SET name = 'Control de accesos a la base de datos', description = 'Gestión de cuentas, privilegios y monitoreo de la actividad sobre las bases de datos' WHERE code = 'D3';
+UPDATE iso_domains SET name = 'Criptografía y protección de datos', description = 'Cifrado de datos en reposo y en tránsito, y enmascaramiento de información sensible' WHERE code = 'D4';
+UPDATE iso_domains SET name = 'Operaciones, respaldo y continuidad de la base de datos', description = 'Respaldos, gestión de parches y gestión de cambios sobre las bases de datos' WHERE code = 'D5';
+UPDATE iso_domains SET name = 'Seguridad física y de infraestructura del servidor de base de datos', description = 'Protección física y ambiental de los servidores que alojan las bases de datos' WHERE code = 'D6';
+UPDATE iso_domains SET name = 'Cumplimiento, auditoría y gestión de riesgos de la base de datos', description = 'Evaluación de riesgos, cumplimiento normativo y auditoría interna de la base de datos' WHERE code = 'D7';
 
 -- ------------------------------------------------------------
--- Datos semilla: 7 dominios, especificos de administracion de BD
+-- 2) Controles (por codigo) — incluye el objetivo, antes vacio
 -- ------------------------------------------------------------
-INSERT INTO iso_domains (code, name, description, status) VALUES
-('D1', 'Gobierno y políticas de la base de datos', 'Políticas, roles y responsabilidades para la administración segura de bases de datos', 'active'),
-('D2', 'Gestión de activos de datos', 'Inventario, clasificación, propiedad y ciclo de vida de las bases de datos y su información', 'active'),
-('D3', 'Control de accesos a la base de datos', 'Gestión de cuentas, privilegios y monitoreo de la actividad sobre las bases de datos', 'active'),
-('D4', 'Criptografía y protección de datos', 'Cifrado de datos en reposo y en tránsito, y enmascaramiento de información sensible', 'active'),
-('D5', 'Operaciones, respaldo y continuidad de la base de datos', 'Respaldos, gestión de parches y gestión de cambios sobre las bases de datos', 'active'),
-('D6', 'Seguridad física y de infraestructura del servidor de base de datos', 'Protección física y ambiental de los servidores que alojan las bases de datos', 'active'),
-('D7', 'Cumplimiento, auditoría y gestión de riesgos de la base de datos', 'Evaluación de riesgos, cumplimiento normativo y auditoría interna de la base de datos', 'active');
-
--- ------------------------------------------------------------
--- Datos semilla: 15 controles, especificos de administracion de BD,
--- con objetivo, peso, relacion CID y referencia ISO/IEC 27002:2022
--- ya definidos (ninguno queda pendiente de redactar).
--- ------------------------------------------------------------
-INSERT INTO iso_controls (domain_id, code, title, description, objective, weight, confidentiality, integrity, availability, iso_reference, status) VALUES
-((SELECT id FROM iso_domains WHERE code='D1'), 'C1', 'Política de seguridad de la base de datos', 'Existencia, aprobación y comunicación de una política de seguridad específica para la administración de bases de datos', 'Garantizar que la organización cuente con lineamientos formales y vigentes que guíen la administración segura de sus bases de datos, alineados con la norma ISO/IEC 27002.', 1.00, 1, 1, 1, '5.1', 'active'),
-((SELECT id FROM iso_domains WHERE code='D1'), 'C2', 'Roles, responsabilidades y segregación de funciones del DBA', 'Definición de roles, responsabilidades y segregación de funciones del administrador de base de datos (DBA)', 'Asegurar que las funciones de administración de bases de datos estén claramente asignadas y separadas de las de desarrollo/aplicación, para reducir el riesgo de errores o abuso de privilegios.', 1.50, 1, 1, 0, '5.2 / 5.3', 'active'),
-((SELECT id FROM iso_domains WHERE code='D2'), 'C3', 'Inventario y clasificación de bases de datos y datos sensibles', 'Identificación, inventario y clasificación de las bases de datos y de la información sensible que contienen', 'Conocer con exactitud qué bases de datos existen, dónde están y qué nivel de sensibilidad tiene la información que almacenan, como base para priorizar su protección.', 1.00, 1, 1, 0, '5.9 / 5.12', 'active'),
-((SELECT id FROM iso_domains WHERE code='D2'), 'C4', 'Propiedad, retención y eliminación segura de datos', 'Asignación de propietarios de datos y gestión del ciclo de vida (retención y eliminación) de la información almacenada', 'Asegurar que cada base de datos tenga un responsable definido y que los datos se conserven o eliminen conforme a criterios de negocio y requisitos legales, evitando exposición innecesaria.', 1.00, 1, 0, 0, '5.10 / 8.10', 'active'),
-((SELECT id FROM iso_domains WHERE code='D3'), 'C5', 'Gestión de cuentas y autenticación de usuarios de la base de datos', 'Ciclo de vida de cuentas de usuario de la base de datos y mecanismos de autenticación utilizados', 'Garantizar que solo cuentas autorizadas e identificables puedan autenticarse contra la base de datos, y que las cuentas por defecto o inactivas no representen una puerta de entrada no controlada.', 1.50, 1, 1, 0, '5.16 / 5.17 / 8.5', 'active'),
-((SELECT id FROM iso_domains WHERE code='D3'), 'C6', 'Gestión de privilegios y mínimo privilegio', 'Asignación, revisión y revocación de privilegios sobre la base de datos según el principio de mínimo privilegio', 'Reducir el riesgo de accesos indebidos o excesivos asegurando que cada usuario y aplicación tenga únicamente los privilegios estrictamente necesarios para su función.', 2.00, 1, 1, 0, '8.2 / 8.3', 'active'),
-((SELECT id FROM iso_domains WHERE code='D3'), 'C7', 'Monitoreo y auditoría de actividad privilegiada en la base de datos', 'Registro, protección y revisión de los registros (logs) de actividad de cuentas privilegiadas sobre la base de datos', 'Detectar oportunamente actividad no autorizada o anómala sobre la base de datos y garantizar que los registros de auditoría no puedan ser alterados por quienes son objeto de la auditoría.', 1.50, 1, 1, 0, '8.15 / 8.16', 'active'),
-((SELECT id FROM iso_domains WHERE code='D4'), 'C8', 'Cifrado de datos en reposo', 'Uso de cifrado y gestión de llaves criptográficas para proteger los datos almacenados en la base de datos', 'Asegurar que la información sensible almacenada permanezca ilegible ante un acceso no autorizado al motor de base de datos o a sus archivos físicos.', 1.50, 1, 0, 0, '8.24', 'active'),
-((SELECT id FROM iso_domains WHERE code='D4'), 'C9', 'Cifrado en tránsito y enmascaramiento de datos', 'Protección de las conexiones hacia la base de datos y enmascaramiento de datos sensibles en ambientes no productivos', 'Evitar la exposición de información sensible mientras viaja por la red o cuando se replica en ambientes de desarrollo y pruebas.', 1.00, 1, 0, 0, '8.24 / 8.20 / 8.11', 'active'),
-((SELECT id FROM iso_domains WHERE code='D5'), 'C10', 'Gestión de respaldos y recuperación', 'Política, ejecución y prueba de respaldos (backups) de las bases de datos críticas', 'Garantizar que la organización pueda recuperar la información de sus bases de datos ante pérdida, corrupción o desastre, dentro de tiempos de recuperación aceptables.', 2.00, 0, 1, 1, '8.13', 'active'),
-((SELECT id FROM iso_domains WHERE code='D5'), 'C11', 'Gestión de parches y vulnerabilidades del motor de base de datos', 'Identificación, prueba y aplicación de parches de seguridad y gestión de vulnerabilidades del motor de base de datos', 'Reducir la ventana de exposición ante vulnerabilidades conocidas del motor de base de datos, manteniendo versiones soportadas y actualizadas.', 1.50, 1, 1, 1, '8.8 / 8.19', 'active'),
-((SELECT id FROM iso_domains WHERE code='D5'), 'C12', 'Gestión de cambios en esquema y configuración', 'Control de cambios sobre la estructura, configuración y parámetros de las bases de datos en producción', 'Evitar que cambios no controlados en el esquema o la configuración de la base de datos generen errores, inconsistencias o interrupciones del servicio.', 1.00, 0, 1, 1, '8.32', 'active'),
-((SELECT id FROM iso_domains WHERE code='D6'), 'C13', 'Seguridad física del centro de datos y servidores de base de datos', 'Control de acceso físico a los servidores y áreas donde residen las bases de datos', 'Impedir el acceso físico no autorizado al hardware donde se ejecutan las bases de datos, que podría derivar en robo, manipulación o daño directo a la información.', 1.00, 1, 0, 1, '7.1 / 7.2', 'active'),
-((SELECT id FROM iso_domains WHERE code='D6'), 'C14', 'Protección ambiental e infraestructura de soporte', 'Condiciones ambientales y de infraestructura de soporte (energía, climatización, incendio) para los servidores de base de datos', 'Asegurar la disponibilidad continua de los servidores de base de datos ante fallas ambientales o de infraestructura eléctrica.', 0.75, 0, 0, 1, '7.5 / 7.8', 'active'),
-((SELECT id FROM iso_domains WHERE code='D7'), 'C15', 'Gestión de riesgos, cumplimiento normativo y auditoría interna de la base de datos', 'Evaluación de riesgos, cumplimiento legal aplicable y auditorías internas sobre los controles de seguridad de la base de datos', 'Asegurar que la organización identifique y trate proactivamente los riesgos sobre sus bases de datos, cumpla la normativa de protección de datos aplicable, y verifique periódicamente la efectividad de sus controles mediante auditoría interna.', 1.50, 1, 1, 1, '5.31 / 5.35 / 6.1', 'active');
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D1'), title='Política de seguridad de la base de datos', description='Existencia, aprobación y comunicación de una política de seguridad específica para la administración de bases de datos', objective='Garantizar que la organización cuente con lineamientos formales y vigentes que guíen la administración segura de sus bases de datos, alineados con la norma ISO/IEC 27002.', weight=1.00, confidentiality=1, integrity=1, availability=1, iso_reference='5.1' WHERE code='C1';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D1'), title='Roles, responsabilidades y segregación de funciones del DBA', description='Definición de roles, responsabilidades y segregación de funciones del administrador de base de datos (DBA)', objective='Asegurar que las funciones de administración de bases de datos estén claramente asignadas y separadas de las de desarrollo/aplicación, para reducir el riesgo de errores o abuso de privilegios.', weight=1.50, confidentiality=1, integrity=1, availability=0, iso_reference='5.2 / 5.3' WHERE code='C2';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D2'), title='Inventario y clasificación de bases de datos y datos sensibles', description='Identificación, inventario y clasificación de las bases de datos y de la información sensible que contienen', objective='Conocer con exactitud qué bases de datos existen, dónde están y qué nivel de sensibilidad tiene la información que almacenan, como base para priorizar su protección.', weight=1.00, confidentiality=1, integrity=1, availability=0, iso_reference='5.9 / 5.12' WHERE code='C3';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D2'), title='Propiedad, retención y eliminación segura de datos', description='Asignación de propietarios de datos y gestión del ciclo de vida (retención y eliminación) de la información almacenada', objective='Asegurar que cada base de datos tenga un responsable definido y que los datos se conserven o eliminen conforme a criterios de negocio y requisitos legales, evitando exposición innecesaria.', weight=1.00, confidentiality=1, integrity=0, availability=0, iso_reference='5.10 / 8.10' WHERE code='C4';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D3'), title='Gestión de cuentas y autenticación de usuarios de la base de datos', description='Ciclo de vida de cuentas de usuario de la base de datos y mecanismos de autenticación utilizados', objective='Garantizar que solo cuentas autorizadas e identificables puedan autenticarse contra la base de datos, y que las cuentas por defecto o inactivas no representen una puerta de entrada no controlada.', weight=1.50, confidentiality=1, integrity=1, availability=0, iso_reference='5.16 / 5.17 / 8.5' WHERE code='C5';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D3'), title='Gestión de privilegios y mínimo privilegio', description='Asignación, revisión y revocación de privilegios sobre la base de datos según el principio de mínimo privilegio', objective='Reducir el riesgo de accesos indebidos o excesivos asegurando que cada usuario y aplicación tenga únicamente los privilegios estrictamente necesarios para su función.', weight=2.00, confidentiality=1, integrity=1, availability=0, iso_reference='8.2 / 8.3' WHERE code='C6';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D3'), title='Monitoreo y auditoría de actividad privilegiada en la base de datos', description='Registro, protección y revisión de los registros (logs) de actividad de cuentas privilegiadas sobre la base de datos', objective='Detectar oportunamente actividad no autorizada o anómala sobre la base de datos y garantizar que los registros de auditoría no puedan ser alterados por quienes son objeto de la auditoría.', weight=1.50, confidentiality=1, integrity=1, availability=0, iso_reference='8.15 / 8.16' WHERE code='C7';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D4'), title='Cifrado de datos en reposo', description='Uso de cifrado y gestión de llaves criptográficas para proteger los datos almacenados en la base de datos', objective='Asegurar que la información sensible almacenada permanezca ilegible ante un acceso no autorizado al motor de base de datos o a sus archivos físicos.', weight=1.50, confidentiality=1, integrity=0, availability=0, iso_reference='8.24' WHERE code='C8';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D4'), title='Cifrado en tránsito y enmascaramiento de datos', description='Protección de las conexiones hacia la base de datos y enmascaramiento de datos sensibles en ambientes no productivos', objective='Evitar la exposición de información sensible mientras viaja por la red o cuando se replica en ambientes de desarrollo y pruebas.', weight=1.00, confidentiality=1, integrity=0, availability=0, iso_reference='8.24 / 8.20 / 8.11' WHERE code='C9';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D5'), title='Gestión de respaldos y recuperación', description='Política, ejecución y prueba de respaldos (backups) de las bases de datos críticas', objective='Garantizar que la organización pueda recuperar la información de sus bases de datos ante pérdida, corrupción o desastre, dentro de tiempos de recuperación aceptables.', weight=2.00, confidentiality=0, integrity=1, availability=1, iso_reference='8.13' WHERE code='C10';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D5'), title='Gestión de parches y vulnerabilidades del motor de base de datos', description='Identificación, prueba y aplicación de parches de seguridad y gestión de vulnerabilidades del motor de base de datos', objective='Reducir la ventana de exposición ante vulnerabilidades conocidas del motor de base de datos, manteniendo versiones soportadas y actualizadas.', weight=1.50, confidentiality=1, integrity=1, availability=1, iso_reference='8.8 / 8.19' WHERE code='C11';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D5'), title='Gestión de cambios en esquema y configuración', description='Control de cambios sobre la estructura, configuración y parámetros de las bases de datos en producción', objective='Evitar que cambios no controlados en el esquema o la configuración de la base de datos generen errores, inconsistencias o interrupciones del servicio.', weight=1.00, confidentiality=0, integrity=1, availability=1, iso_reference='8.32' WHERE code='C12';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D6'), title='Seguridad física del centro de datos y servidores de base de datos', description='Control de acceso físico a los servidores y áreas donde residen las bases de datos', objective='Impedir el acceso físico no autorizado al hardware donde se ejecutan las bases de datos, que podría derivar en robo, manipulación o daño directo a la información.', weight=1.00, confidentiality=1, integrity=0, availability=1, iso_reference='7.1 / 7.2' WHERE code='C13';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D6'), title='Protección ambiental e infraestructura de soporte', description='Condiciones ambientales y de infraestructura de soporte (energía, climatización, incendio) para los servidores de base de datos', objective='Asegurar la disponibilidad continua de los servidores de base de datos ante fallas ambientales o de infraestructura eléctrica.', weight=0.75, confidentiality=0, integrity=0, availability=1, iso_reference='7.5 / 7.8' WHERE code='C14';
+UPDATE iso_controls SET domain_id=(SELECT id FROM iso_domains WHERE code='D7'), title='Gestión de riesgos, cumplimiento normativo y auditoría interna de la base de datos', description='Evaluación de riesgos, cumplimiento legal aplicable y auditorías internas sobre los controles de seguridad de la base de datos', objective='Asegurar que la organización identifique y trate proactivamente los riesgos sobre sus bases de datos, cumpla la normativa de protección de datos aplicable, y verifique periódicamente la efectividad de sus controles mediante auditoría interna.', weight=1.50, confidentiality=1, integrity=1, availability=1, iso_reference='5.31 / 5.35 / 6.1' WHERE code='C15';
 
 -- ------------------------------------------------------------
--- Datos semilla: 75 preguntas (5 por control), especificas de
--- administracion de bases de datos.
+-- 3) Preguntas (por id, mismo orden de insercion del schema.sql
+--    original: 5 preguntas por control, C1..C15 -> id 1..75)
 -- ------------------------------------------------------------
-INSERT INTO questions (control_id, question, weight, status) VALUES
-((SELECT id FROM iso_controls WHERE code='C1'), '¿Existe una política de seguridad específica para la administración de bases de datos, documentada y aprobada por la dirección?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C1'), '¿La política cubre los requisitos mínimos de configuración segura del motor de base de datos (hardening)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C1'), '¿La política se comunica y es de conocimiento de todo el personal que administra o accede a las bases de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C1'), '¿La política se revisa y actualiza periódicamente conforme cambian las versiones del motor de base de datos o la normativa aplicable?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C1'), '¿Existen indicadores para verificar el cumplimiento de la política de seguridad de bases de datos?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C2'), '¿Están formalmente definidas las funciones y responsabilidades del/los administrador(es) de base de datos (DBA)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C2'), '¿Existe segregación de funciones entre el rol de DBA, el de desarrollo y el de administración de aplicaciones?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C2'), '¿Se documenta y aprueba formalmente quién puede actuar como DBA en cada base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C2'), '¿Se capacita periódicamente al personal DBA en buenas prácticas de seguridad del motor de base de datos utilizado?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C2'), '¿Existen procedimientos de respaldo de personal para que la administración de la base de datos no dependa de una sola persona?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C3'), '¿Existe un inventario actualizado de todas las bases de datos, instancias y motores utilizados por la organización?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C3'), '¿Se ha identificado y clasificado la información sensible almacenada en las bases de datos (datos personales, financieros, de salud, etc.)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C3'), '¿Se documentan los esquemas, tablas o columnas que contienen datos clasificados como críticos o sensibles?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C3'), '¿Se revisa periódicamente el inventario de bases de datos para detectar instancias no autorizadas o "shadow IT"?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C3'), '¿El inventario incluye la versión del motor, ubicación (servidor/nube) y responsable de cada base de datos?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C4'), '¿Están asignados formalmente los propietarios (data owners) responsables de cada base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C4'), '¿Existen políticas de retención de datos que definan por cuánto tiempo se conserva la información en cada base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C4'), '¿Se aplican procedimientos de eliminación segura (borrado definitivo) de datos y bases de datos que ya no se requieren?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C4'), '¿Se depuran o enmascaran las copias de datos de prueba/desarrollo que contienen información sensible real?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C4'), '¿Se documentan las excepciones cuando datos que deberían eliminarse se conservan por requerimiento legal?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C5'), '¿Existe un procedimiento formal para la creación, modificación y baja de cuentas de usuario en la base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C5'), '¿Se eliminan o deshabilitan las cuentas por defecto del motor de base de datos (usuarios predeterminados, ejemplos)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C5'), '¿Se exige el uso de contraseñas robustas y/o autenticación multifactor para el acceso administrativo a la base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C5'), '¿Las cuentas de servicio/aplicación que se conectan a la base de datos están identificadas y no se comparten entre sistemas?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C5'), '¿Se realiza una revisión periódica de cuentas activas para detectar cuentas huérfanas o inactivas?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C6'), '¿Los privilegios sobre la base de datos se otorgan siguiendo el principio de mínimo privilegio?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C6'), '¿Existen roles definidos (lectura, escritura, administración) en lugar de otorgar privilegios individuales caso por caso?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C6'), '¿Se revisan y aprueban formalmente las solicitudes de privilegios elevados (DBA, sysadmin) antes de otorgarlos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C6'), '¿Se realiza una recertificación periódica de los privilegios otorgados a usuarios y aplicaciones?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C6'), '¿Se revocan oportunamente los privilegios cuando un usuario cambia de función o deja de trabajar en la organización?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C7'), '¿Se registran (logging) las acciones realizadas por cuentas con privilegios administrativos sobre la base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C7'), '¿Existen alertas automáticas ante actividades inusuales o no autorizadas sobre la base de datos (consultas masivas, cambios de esquema, exportaciones)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C7'), '¿Los registros de auditoría de la base de datos se protegen contra alteración o eliminación por parte de los propios DBA?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C7'), '¿Se revisan periódicamente los registros de actividad de la base de datos por personal distinto al DBA auditado?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C7'), '¿Se conservan los registros de auditoría de la base de datos durante un período definido acorde a la normativa aplicable?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C8'), '¿Se utiliza cifrado de datos en reposo (TDE u otro mecanismo) en las bases de datos que almacenan información sensible?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C8'), '¿Las llaves de cifrado se gestionan y protegen mediante un mecanismo independiente del propio motor de base de datos (KMS, HSM)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C8'), '¿Existen procedimientos definidos para la rotación periódica de llaves criptográficas?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C8'), '¿Los respaldos (backups) de la base de datos se almacenan también cifrados?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C8'), '¿Se revisa periódicamente que los algoritmos y parámetros criptográficos utilizados sigan siendo adecuados (no obsoletos)?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C9'), '¿Las conexiones hacia la base de datos utilizan cifrado en tránsito (TLS/SSL) de forma obligatoria?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C9'), '¿Se restringe o cifra el acceso remoto administrativo a la base de datos (VPN, túneles seguros)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C9'), '¿Se enmascaran o anonimizan los datos sensibles cuando se copian a ambientes de desarrollo, pruebas o capacitación?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C9'), '¿Las cadenas de conexión y credenciales de acceso a la base de datos se almacenan de forma segura (no en texto plano en el código)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C9'), '¿Se valida que las herramientas de administración remota de la base de datos no transmitan credenciales sin cifrar?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C10'), '¿Existe una política de respaldo (backup) de bases de datos que defina frecuencia, tipo y retención?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C10'), '¿Los respaldos cubren todas las bases de datos críticas identificadas en el inventario?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C10'), '¿Se realizan pruebas periódicas de restauración para verificar que los respaldos son utilizables?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C10'), '¿Se documentan los objetivos de tiempo de recuperación (RTO) y punto de recuperación (RPO) para las bases de datos críticas?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C10'), '¿Los respaldos se almacenan en una ubicación distinta (física o lógicamente) al servidor de producción?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C11'), '¿Existe un procedimiento formal para identificar y aplicar parches de seguridad al motor de base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C11'), '¿Se realizan escaneos o evaluaciones periódicas de vulnerabilidades sobre los servidores de base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C11'), '¿Los parches críticos se aplican dentro de un plazo definido después de su publicación?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C11'), '¿Se prueban los parches en un ambiente no productivo antes de aplicarlos en producción?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C11'), '¿Se mantiene un registro de las versiones del motor de base de datos y su estado de soporte (fin de vida/EOL)?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C12'), '¿Existe un procedimiento formal de gestión de cambios para modificaciones de esquema, configuración o parámetros de la base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C12'), '¿Los cambios en producción requieren aprobación previa de una persona distinta a quien los ejecuta?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C12'), '¿Se prueban los cambios de esquema o configuración en un ambiente de pruebas antes de aplicarlos en producción?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C12'), '¿Existe un procedimiento de reversión (rollback) documentado ante cambios fallidos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C12'), '¿Se mantiene un historial de los cambios realizados sobre la estructura de las bases de datos?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C13'), '¿El acceso físico a los servidores donde residen las bases de datos está restringido y controlado?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C13'), '¿Se registra y audita el ingreso de personas al centro de datos o cuarto de servidores?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C13'), '¿Existen controles adicionales (biométricos, tarjetas, doble factor) para el acceso a zonas donde están los servidores de base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C13'), '¿Se gestionan de forma segura los accesos temporales de proveedores o personal externo a la infraestructura de base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C13'), '¿Se realizan inspecciones periódicas de los controles físicos de seguridad del centro de datos?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C14'), '¿Los servidores de base de datos cuentan con sistemas de respaldo eléctrico (UPS/planta) ante cortes de energía?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C14'), '¿Existen sistemas de control de temperatura y humedad adecuados para el hardware que aloja las bases de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C14'), '¿Se dispone de sistemas de detección y supresión de incendios en el área donde operan los servidores de base de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C14'), '¿Existen planes de contingencia documentados ante fallas ambientales (energía, climatización, incendio)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C14'), '¿Se realizan pruebas periódicas de los sistemas de respaldo eléctrico y ambiental?', 1.00, 'active'),
-
-((SELECT id FROM iso_controls WHERE code='C15'), '¿Se realiza una evaluación periódica de riesgos específica para la administración de las bases de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C15'), '¿Se identifican los requisitos legales y regulatorios aplicables al tratamiento de datos almacenados (ej. protección de datos personales)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C15'), '¿Se realizan auditorías internas periódicas sobre los controles de seguridad de las bases de datos?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C15'), '¿Existen procedimientos definidos para responder ante incidentes de seguridad que involucren bases de datos (fuga, corrupción, acceso no autorizado)?', 1.00, 'active'),
-((SELECT id FROM iso_controls WHERE code='C15'), '¿Se documentan y dan seguimiento a los hallazgos de auditorías o evaluaciones de riesgo anteriores sobre la base de datos?', 1.00, 'active');
+UPDATE questions SET question='¿Existe una política de seguridad específica para la administración de bases de datos, documentada y aprobada por la dirección?' WHERE id=1;
+UPDATE questions SET question='¿La política cubre los requisitos mínimos de configuración segura del motor de base de datos (hardening)?' WHERE id=2;
+UPDATE questions SET question='¿La política se comunica y es de conocimiento de todo el personal que administra o accede a las bases de datos?' WHERE id=3;
+UPDATE questions SET question='¿La política se revisa y actualiza periódicamente conforme cambian las versiones del motor de base de datos o la normativa aplicable?' WHERE id=4;
+UPDATE questions SET question='¿Existen indicadores para verificar el cumplimiento de la política de seguridad de bases de datos?' WHERE id=5;
+UPDATE questions SET question='¿Están formalmente definidas las funciones y responsabilidades del/los administrador(es) de base de datos (DBA)?' WHERE id=6;
+UPDATE questions SET question='¿Existe segregación de funciones entre el rol de DBA, el de desarrollo y el de administración de aplicaciones?' WHERE id=7;
+UPDATE questions SET question='¿Se documenta y aprueba formalmente quién puede actuar como DBA en cada base de datos?' WHERE id=8;
+UPDATE questions SET question='¿Se capacita periódicamente al personal DBA en buenas prácticas de seguridad del motor de base de datos utilizado?' WHERE id=9;
+UPDATE questions SET question='¿Existen procedimientos de respaldo de personal para que la administración de la base de datos no dependa de una sola persona?' WHERE id=10;
+UPDATE questions SET question='¿Existe un inventario actualizado de todas las bases de datos, instancias y motores utilizados por la organización?' WHERE id=11;
+UPDATE questions SET question='¿Se ha identificado y clasificado la información sensible almacenada en las bases de datos (datos personales, financieros, de salud, etc.)?' WHERE id=12;
+UPDATE questions SET question='¿Se documentan los esquemas, tablas o columnas que contienen datos clasificados como críticos o sensibles?' WHERE id=13;
+UPDATE questions SET question='¿Se revisa periódicamente el inventario de bases de datos para detectar instancias no autorizadas o "shadow IT"?' WHERE id=14;
+UPDATE questions SET question='¿El inventario incluye la versión del motor, ubicación (servidor/nube) y responsable de cada base de datos?' WHERE id=15;
+UPDATE questions SET question='¿Están asignados formalmente los propietarios (data owners) responsables de cada base de datos?' WHERE id=16;
+UPDATE questions SET question='¿Existen políticas de retención de datos que definan por cuánto tiempo se conserva la información en cada base de datos?' WHERE id=17;
+UPDATE questions SET question='¿Se aplican procedimientos de eliminación segura (borrado definitivo) de datos y bases de datos que ya no se requieren?' WHERE id=18;
+UPDATE questions SET question='¿Se depuran o enmascaran las copias de datos de prueba/desarrollo que contienen información sensible real?' WHERE id=19;
+UPDATE questions SET question='¿Se documentan las excepciones cuando datos que deberían eliminarse se conservan por requerimiento legal?' WHERE id=20;
+UPDATE questions SET question='¿Existe un procedimiento formal para la creación, modificación y baja de cuentas de usuario en la base de datos?' WHERE id=21;
+UPDATE questions SET question='¿Se eliminan o deshabilitan las cuentas por defecto del motor de base de datos (usuarios predeterminados, ejemplos)?' WHERE id=22;
+UPDATE questions SET question='¿Se exige el uso de contraseñas robustas y/o autenticación multifactor para el acceso administrativo a la base de datos?' WHERE id=23;
+UPDATE questions SET question='¿Las cuentas de servicio/aplicación que se conectan a la base de datos están identificadas y no se comparten entre sistemas?' WHERE id=24;
+UPDATE questions SET question='¿Se realiza una revisión periódica de cuentas activas para detectar cuentas huérfanas o inactivas?' WHERE id=25;
+UPDATE questions SET question='¿Los privilegios sobre la base de datos se otorgan siguiendo el principio de mínimo privilegio?' WHERE id=26;
+UPDATE questions SET question='¿Existen roles definidos (lectura, escritura, administración) en lugar de otorgar privilegios individuales caso por caso?' WHERE id=27;
+UPDATE questions SET question='¿Se revisan y aprueban formalmente las solicitudes de privilegios elevados (DBA, sysadmin) antes de otorgarlos?' WHERE id=28;
+UPDATE questions SET question='¿Se realiza una recertificación periódica de los privilegios otorgados a usuarios y aplicaciones?' WHERE id=29;
+UPDATE questions SET question='¿Se revocan oportunamente los privilegios cuando un usuario cambia de función o deja de trabajar en la organización?' WHERE id=30;
+UPDATE questions SET question='¿Se registran (logging) las acciones realizadas por cuentas con privilegios administrativos sobre la base de datos?' WHERE id=31;
+UPDATE questions SET question='¿Existen alertas automáticas ante actividades inusuales o no autorizadas sobre la base de datos (consultas masivas, cambios de esquema, exportaciones)?' WHERE id=32;
+UPDATE questions SET question='¿Los registros de auditoría de la base de datos se protegen contra alteración o eliminación por parte de los propios DBA?' WHERE id=33;
+UPDATE questions SET question='¿Se revisan periódicamente los registros de actividad de la base de datos por personal distinto al DBA auditado?' WHERE id=34;
+UPDATE questions SET question='¿Se conservan los registros de auditoría de la base de datos durante un período definido acorde a la normativa aplicable?' WHERE id=35;
+UPDATE questions SET question='¿Se utiliza cifrado de datos en reposo (TDE u otro mecanismo) en las bases de datos que almacenan información sensible?' WHERE id=36;
+UPDATE questions SET question='¿Las llaves de cifrado se gestionan y protegen mediante un mecanismo independiente del propio motor de base de datos (KMS, HSM)?' WHERE id=37;
+UPDATE questions SET question='¿Existen procedimientos definidos para la rotación periódica de llaves criptográficas?' WHERE id=38;
+UPDATE questions SET question='¿Los respaldos (backups) de la base de datos se almacenan también cifrados?' WHERE id=39;
+UPDATE questions SET question='¿Se revisa periódicamente que los algoritmos y parámetros criptográficos utilizados sigan siendo adecuados (no obsoletos)?' WHERE id=40;
+UPDATE questions SET question='¿Las conexiones hacia la base de datos utilizan cifrado en tránsito (TLS/SSL) de forma obligatoria?' WHERE id=41;
+UPDATE questions SET question='¿Se restringe o cifra el acceso remoto administrativo a la base de datos (VPN, túneles seguros)?' WHERE id=42;
+UPDATE questions SET question='¿Se enmascaran o anonimizan los datos sensibles cuando se copian a ambientes de desarrollo, pruebas o capacitación?' WHERE id=43;
+UPDATE questions SET question='¿Las cadenas de conexión y credenciales de acceso a la base de datos se almacenan de forma segura (no en texto plano en el código)?' WHERE id=44;
+UPDATE questions SET question='¿Se valida que las herramientas de administración remota de la base de datos no transmitan credenciales sin cifrar?' WHERE id=45;
+UPDATE questions SET question='¿Existe una política de respaldo (backup) de bases de datos que defina frecuencia, tipo y retención?' WHERE id=46;
+UPDATE questions SET question='¿Los respaldos cubren todas las bases de datos críticas identificadas en el inventario?' WHERE id=47;
+UPDATE questions SET question='¿Se realizan pruebas periódicas de restauración para verificar que los respaldos son utilizables?' WHERE id=48;
+UPDATE questions SET question='¿Se documentan los objetivos de tiempo de recuperación (RTO) y punto de recuperación (RPO) para las bases de datos críticas?' WHERE id=49;
+UPDATE questions SET question='¿Los respaldos se almacenan en una ubicación distinta (física o lógicamente) al servidor de producción?' WHERE id=50;
+UPDATE questions SET question='¿Existe un procedimiento formal para identificar y aplicar parches de seguridad al motor de base de datos?' WHERE id=51;
+UPDATE questions SET question='¿Se realizan escaneos o evaluaciones periódicas de vulnerabilidades sobre los servidores de base de datos?' WHERE id=52;
+UPDATE questions SET question='¿Los parches críticos se aplican dentro de un plazo definido después de su publicación?' WHERE id=53;
+UPDATE questions SET question='¿Se prueban los parches en un ambiente no productivo antes de aplicarlos en producción?' WHERE id=54;
+UPDATE questions SET question='¿Se mantiene un registro de las versiones del motor de base de datos y su estado de soporte (fin de vida/EOL)?' WHERE id=55;
+UPDATE questions SET question='¿Existe un procedimiento formal de gestión de cambios para modificaciones de esquema, configuración o parámetros de la base de datos?' WHERE id=56;
+UPDATE questions SET question='¿Los cambios en producción requieren aprobación previa de una persona distinta a quien los ejecuta?' WHERE id=57;
+UPDATE questions SET question='¿Se prueban los cambios de esquema o configuración en un ambiente de pruebas antes de aplicarlos en producción?' WHERE id=58;
+UPDATE questions SET question='¿Existe un procedimiento de reversión (rollback) documentado ante cambios fallidos?' WHERE id=59;
+UPDATE questions SET question='¿Se mantiene un historial de los cambios realizados sobre la estructura de las bases de datos?' WHERE id=60;
+UPDATE questions SET question='¿El acceso físico a los servidores donde residen las bases de datos está restringido y controlado?' WHERE id=61;
+UPDATE questions SET question='¿Se registra y audita el ingreso de personas al centro de datos o cuarto de servidores?' WHERE id=62;
+UPDATE questions SET question='¿Existen controles adicionales (biométricos, tarjetas, doble factor) para el acceso a zonas donde están los servidores de base de datos?' WHERE id=63;
+UPDATE questions SET question='¿Se gestionan de forma segura los accesos temporales de proveedores o personal externo a la infraestructura de base de datos?' WHERE id=64;
+UPDATE questions SET question='¿Se realizan inspecciones periódicas de los controles físicos de seguridad del centro de datos?' WHERE id=65;
+UPDATE questions SET question='¿Los servidores de base de datos cuentan con sistemas de respaldo eléctrico (UPS/planta) ante cortes de energía?' WHERE id=66;
+UPDATE questions SET question='¿Existen sistemas de control de temperatura y humedad adecuados para el hardware que aloja las bases de datos?' WHERE id=67;
+UPDATE questions SET question='¿Se dispone de sistemas de detección y supresión de incendios en el área donde operan los servidores de base de datos?' WHERE id=68;
+UPDATE questions SET question='¿Existen planes de contingencia documentados ante fallas ambientales (energía, climatización, incendio)?' WHERE id=69;
+UPDATE questions SET question='¿Se realizan pruebas periódicas de los sistemas de respaldo eléctrico y ambiental?' WHERE id=70;
+UPDATE questions SET question='¿Se realiza una evaluación periódica de riesgos específica para la administración de las bases de datos?' WHERE id=71;
+UPDATE questions SET question='¿Se identifican los requisitos legales y regulatorios aplicables al tratamiento de datos almacenados (ej. protección de datos personales)?' WHERE id=72;
+UPDATE questions SET question='¿Se realizan auditorías internas periódicas sobre los controles de seguridad de las bases de datos?' WHERE id=73;
+UPDATE questions SET question='¿Existen procedimientos definidos para responder ante incidentes de seguridad que involucren bases de datos (fuga, corrupción, acceso no autorizado)?' WHERE id=74;
+UPDATE questions SET question='¿Se documentan y dan seguimiento a los hallazgos de auditorías o evaluaciones de riesgo anteriores sobre la base de datos?' WHERE id=75;
 
 -- ------------------------------------------------------------
--- Datos semilla: escala de madurez 0-5 explicada por pregunta,
--- especifica de administracion de bases de datos (no texto
--- generico repetido entre preguntas).
+-- 4) Escala de madurez por pregunta: (question_id, level) es
+--    UNIQUE KEY (uq_qms), asi que el upsert sobrescribe el texto
+--    sin romper ninguna referencia ni afectar auditorias ya
+--    guardadas (esta tabla no tiene FK entrante desde audits/
+--    responses).
 -- ------------------------------------------------------------
 INSERT INTO question_maturity_scale (question_id, level, description) VALUES
 (1, 0, 'No existe ninguna política de seguridad específica para la administración de bases de datos.'),
@@ -822,4 +592,5 @@ INSERT INTO question_maturity_scale (question_id, level, description) VALUES
 (75, 2, 'Existen hallazgos documentados, pero el seguimiento de las acciones correctivas es incompleto.'),
 (75, 3, 'Los hallazgos y sus acciones correctivas se documentan y se les da seguimiento siguiendo un procedimiento definido, en la mayoría de los casos.'),
 (75, 4, 'El seguimiento de acciones correctivas se supervisa, con evidencia del estado de cada hallazgo.'),
-(75, 5, 'El seguimiento de hallazgos se mide y mejora continuamente, con indicadores de tiempo de cierre y recurrencia.');
+(75, 5, 'El seguimiento de hallazgos se mide y mejora continuamente, con indicadores de tiempo de cierre y recurrencia.')
+ON DUPLICATE KEY UPDATE description = VALUES(description);
