@@ -135,23 +135,24 @@ $maturityShortLabels = [0 => 'No existe', 1 => 'Informal', 2 => 'Parcial', 3 => 
                             <div class="bg-light-subtle border rounded p-3 mb-2">
                                 <div class="mb-2 fw-medium"><?= e($q['question_text']) ?></div>
 
-                                <div class="row g-2">
-                                    <div class="col-md-3">
+                                <?php $currentAnswer = $q['answer'] ?? ''; ?>
+                                <div class="row g-2 pregunta-bloque" data-qid="<?= $qid ?>">
+                                    <div class="col-md-4">
                                         <label class="form-label small mb-1">Respuesta</label>
                                         <div class="d-flex gap-2">
                                             <?php foreach (['yes' => 'Sí', 'no' => 'No', 'na' => 'N/A'] as $val => $lbl): ?>
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="radio"
+                                                    <input class="form-check-input answer-radio" type="radio"
                                                            name="answer[<?= $qid ?>]"
                                                            id="ans_<?= $qid ?>_<?= $val ?>"
                                                            value="<?= $val ?>"
-                                                           <?= ($q['answer'] ?? '') === $val ? 'checked' : '' ?>>
+                                                           <?= $currentAnswer === $val ? 'checked' : '' ?>>
                                                     <label class="form-check-label" for="ans_<?= $qid ?>_<?= $val ?>"><?= $lbl ?></label>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-4">
                                         <label class="form-label small mb-1">Nivel de madurez (0-5)</label>
                                         <select class="form-select form-select-sm maturity-select"
                                                 name="maturity_level[<?= $qid ?>]"
@@ -165,12 +166,7 @@ $maturityShortLabels = [0 => 'No existe', 1 => 'Informal', 2 => 'Parcial', 3 => 
                                                 </option>
                                             <?php endfor; ?>
                                         </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small mb-1">Recomendación</label>
-                                        <input class="form-control form-control-sm"
-                                               name="recommendation[<?= $qid ?>]"
-                                               value="<?= e($q['recommendation'] ?? '') ?>">
+                                        <div class="form-text small maturity-nota text-muted"></div>
                                     </div>
                                 </div>
 
@@ -181,7 +177,7 @@ $maturityShortLabels = [0 => 'No existe', 1 => 'Informal', 2 => 'Parcial', 3 => 
                                 </div>
 
                                 <div class="mt-2">
-                                    <label class="form-label small mb-1">
+                                    <label class="form-label small mb-1 justification-label">
                                         Justificación del nivel de madurez
                                         <span class="text-muted">(evidencia real observada, máx. 500 caracteres)</span>
                                     </label>
@@ -269,16 +265,68 @@ $maturityShortLabels = [0 => 'No existe', 1 => 'Informal', 2 => 'Parcial', 3 => 
 </div>
 
 <script>
-document.querySelectorAll('.maturity-select').forEach(function (sel) {
-    sel.addEventListener('change', function () {
-        var target = document.querySelector(sel.dataset.target);
-        if (! target) { return; }
-        var opt = sel.options[sel.selectedIndex];
-        target.textContent = (opt && opt.dataset.desc)
-            ? opt.dataset.desc
-            : 'Seleccione un nivel para ver qué representa en esta pregunta.';
+function actualizarDescripcionMadurez(sel) {
+    var target = document.querySelector(sel.dataset.target);
+    if (! target) { return; }
+    var opt = sel.options[sel.selectedIndex];
+    target.textContent = (opt && opt.dataset.desc)
+        ? opt.dataset.desc
+        : 'Seleccione un nivel para ver qué representa en esta pregunta.';
+}
+
+// Coherencia respuesta <-> madurez:
+//  Sí -> el auditor debe calificar 1-5 (si existe, ya no es "0 - no existe").
+//  No -> madurez fija en 0, campo bloqueado (no tiene sentido "no" con madurez alta).
+//  N/A -> sin madurez, campo bloqueado; el cuadro de justificación pasa a
+//         preguntar por qué no aplica, no por el nivel.
+// El servidor vuelve a aplicar esta misma regla al guardar, por si se
+// manipula el formulario — esto es solo para guiar al usuario.
+function actualizarBloquePregunta(bloque) {
+    var marcado = bloque.querySelector('.answer-radio:checked');
+    var respuesta = marcado ? marcado.value : '';
+    var select = bloque.querySelector('.maturity-select');
+    var nota = bloque.querySelector('.maturity-nota');
+    var opcionCero = select.querySelector('option[value="0"]');
+    var etiquetaJust = bloque.closest('.bg-light-subtle').querySelector('.justification-label');
+
+    select.disabled = false;
+    opcionCero.hidden = false;
+    nota.textContent = '';
+
+    if (respuesta === 'no') {
+        select.value = '0';
+        select.disabled = true;
+        nota.textContent = 'Fijado en 0: la respuesta fue "No".';
+        etiquetaJust.firstChild.textContent = 'Justificación ';
+        etiquetaJust.querySelector('span').textContent = '(explique qué hace falta para implementarlo, máx. 500 caracteres)';
+    } else if (respuesta === 'na') {
+        select.value = '';
+        select.disabled = true;
+        nota.textContent = 'No aplica: esta pregunta no cuenta en el cálculo de madurez.';
+        etiquetaJust.firstChild.textContent = 'Justificación ';
+        etiquetaJust.querySelector('span').textContent = '(¿por qué no aplica esta pregunta a su organización?, máx. 500 caracteres)';
+    } else {
+        etiquetaJust.firstChild.textContent = 'Justificación del nivel de madurez ';
+        etiquetaJust.querySelector('span').textContent = '(evidencia real observada, máx. 500 caracteres)';
+        if (respuesta === 'yes') {
+            opcionCero.hidden = true;
+            if (select.value === '0') { select.value = ''; }
+        }
+    }
+    actualizarDescripcionMadurez(select);
+}
+
+document.querySelectorAll('.pregunta-bloque').forEach(function (bloque) {
+    actualizarBloquePregunta(bloque);
+    bloque.querySelectorAll('.answer-radio').forEach(function (radio) {
+        radio.addEventListener('change', function () { actualizarBloquePregunta(bloque); });
     });
 });
+
+document.querySelectorAll('.maturity-select').forEach(function (sel) {
+    sel.addEventListener('change', function () { actualizarDescripcionMadurez(sel); });
+});
+
 document.querySelectorAll('.justification-input').forEach(function (field) {
     var counter = document.querySelector(field.dataset.counter);
     if (! counter) { return; }

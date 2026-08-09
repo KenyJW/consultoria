@@ -7,7 +7,12 @@ use App\Core\BaseModel;
 
 final class Response extends BaseModel
 {
-    /** Upsert de respuesta Sí/No/No aplica por pregunta. */
+    /**
+     * Upsert de respuesta Sí/No/No aplica por pregunta.
+     * No toca la columna "recommendation": ese campo por pregunta quedo
+     * retirado del cuestionario (el modulo de Recomendaciones, a nivel de
+     * control, lo reemplaza), asi que ya no se sobreescribe aqui.
+     */
     public function upsert(int $auditId, int $questionId, array $data): int
 {
     $statement = $this->db->prepare(
@@ -16,22 +21,19 @@ final class Response extends BaseModel
             question_id,
             answer,
             maturity_level,
-            justification,
-            recommendation
+            justification
         )
          VALUES (
             :audit_id,
             :question_id,
             :answer,
             :maturity_level,
-            :justification,
-            :recommendation
+            :justification
          )
          ON DUPLICATE KEY UPDATE
             answer         = VALUES(answer),
             maturity_level = VALUES(maturity_level),
-            justification  = VALUES(justification),
-            recommendation = VALUES(recommendation)'
+            justification  = VALUES(justification)'
     );
 
     $statement->execute([
@@ -40,7 +42,6 @@ final class Response extends BaseModel
         'answer'         => $data['answer'],
         'maturity_level' => $data['maturity_level'] ?? null,
         'justification'  => $data['justification'] ?? null,
-        'recommendation' => $data['recommendation'] ?? null,
     ]);
 
     return $this->findId($auditId, $questionId);

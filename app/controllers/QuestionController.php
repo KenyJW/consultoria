@@ -24,7 +24,7 @@ final class QuestionController extends Controller
 
     public function index(): void
     {
-        Middleware::auth();
+        Middleware::roles(['admin']);
         $search = trim((string) ($_GET['q'] ?? ''));
         $controlId = (int) ($_GET['control_id'] ?? 0);
         $sort = (string) ($_GET['sort'] ?? 'created_at');
@@ -65,7 +65,7 @@ final class QuestionController extends Controller
 
     public function show(): void
     {
-        Middleware::auth();
+        Middleware::roles(['admin']);
         $question = $this->questions->find((int) ($_GET['id'] ?? 0));
         if (! $question) {
             Flash::error('Pregunta no encontrada.');

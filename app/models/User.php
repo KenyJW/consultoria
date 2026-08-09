@@ -19,23 +19,54 @@ final class User extends BaseModel
 
     public function find(int $id): ?array
     {
-        $statement = $this->db->prepare('SELECT id, name, email, role, status, created_at FROM users WHERE id = :id LIMIT 1');
+        $statement = $this->db->prepare('SELECT id, name, email, role, status, organization_id, created_at FROM users WHERE id = :id LIMIT 1');
         $statement->execute(['id' => $id]);
         $user = $statement->fetch();
 
         return $user ?: null;
     }
 
+    /** Todos los usuarios (vista de administrador). */
     public function all(): array
     {
-        $statement = $this->db->query('SELECT id, name, email, role, status, created_at FROM users ORDER BY id DESC');
+        $statement = $this->db->query(
+            'SELECT u.id, u.name, u.email, u.role, u.status, u.organization_id, u.created_at,
+                    o.name AS organization_name
+             FROM users u
+             LEFT JOIN organizations o ON o.id = u.organization_id
+             ORDER BY u.id DESC'
+        );
         return $statement->fetchAll();
     }
 
-    public function auditors(): array
+    /** Usuarios de una organizacion especifica (vista de empresa: "Mi equipo"). */
+    public function forOrganization(int $organizationId): array
     {
-        $statement = $this->db->prepare('SELECT id, name, email FROM users WHERE role = :role AND status = :status ORDER BY name ASC');
-        $statement->execute(['role' => 'auditor', 'status' => 'active']);
+        $statement = $this->db->prepare(
+            'SELECT id, name, email, role, status, organization_id, created_at
+             FROM users WHERE organization_id = :organization_id ORDER BY id DESC'
+        );
+        $statement->execute(['organization_id' => $organizationId]);
+        return $statement->fetchAll();
+    }
+
+    /** Auditores disponibles para asignar a una auditoria: personal de la consultora (sin organizacion) + los de la organizacion dada. */
+    public function auditors(?int $organizationId = null): array
+    {
+        $sql = 'SELECT u.id, u.name, u.email, o.name AS organization_name
+                FROM users u
+                LEFT JOIN organizations o ON o.id = u.organization_id
+                WHERE u.role = :role AND u.status = :status
+                  AND (u.organization_id IS NULL';
+        $params = ['role' => 'auditor', 'status' => 'active'];
+        if ($organizationId !== null) {
+            $sql .= ' OR u.organization_id = :organization_id';
+            $params['organization_id'] = $organizationId;
+        }
+        $sql .= ') ORDER BY (u.organization_id IS NULL) DESC, u.name ASC';
+
+        $statement = $this->db->prepare($sql);
+        $statement->execute($params);
         return $statement->fetchAll();
     }
 
@@ -55,7 +86,8 @@ final class User extends BaseModel
     public function create(array $data): bool
     {
         $statement = $this->db->prepare(
-            'INSERT INTO users (name, email, password, role, status) VALUES (:name, :email, :password, :role, :status)'
+            'INSERT INTO users (name, email, password, role, status, organization_id)
+             VALUES (:name, :email, :password, :role, :status, :organization_id)'
         );
 
         return $statement->execute([
@@ -64,18 +96,20 @@ final class User extends BaseModel
             'password' => password_hash($data['password'], PASSWORD_DEFAULT),
             'role' => $data['role'],
             'status' => $data['status'],
+            'organization_id' => $data['organization_id'] ?? null,
         ]);
     }
 
     public function update(int $id, array $data): bool
     {
-        $fields = 'name = :name, email = :email, role = :role, status = :status';
+        $fields = 'name = :name, email = :email, role = :role, status = :status, organization_id = :organization_id';
         $params = [
             'id' => $id,
             'name' => $data['name'],
             'email' => $data['email'],
             'role' => $data['role'],
             'status' => $data['status'],
+            'organization_id' => $data['organization_id'] ?? null,
         ];
 
         if (! empty($data['password'])) {

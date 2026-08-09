@@ -24,7 +24,7 @@ final class IsoControlController extends Controller
 
     public function index(): void
     {
-        Middleware::auth();
+        Middleware::roles(['admin']);
         $search = trim((string) ($_GET['q'] ?? ''));
         $domainId = (int) ($_GET['domain_id'] ?? 0);
         $sort = (string) ($_GET['sort'] ?? 'created_at');
@@ -71,7 +71,7 @@ final class IsoControlController extends Controller
 
     public function show(): void
     {
-        Middleware::auth();
+        Middleware::roles(['admin']);
         $control = $this->controls->find((int) ($_GET['id'] ?? 0));
         if (! $control) {
             Flash::error('Control no encontrado.');

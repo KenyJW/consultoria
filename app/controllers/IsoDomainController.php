@@ -21,7 +21,7 @@ final class IsoDomainController extends Controller
 
     public function index(): void
     {
-        Middleware::auth();
+        Middleware::roles(['admin']);
         $search = trim((string) ($_GET['q'] ?? ''));
         $sort = (string) ($_GET['sort'] ?? 'created_at');
         $direction = (string) ($_GET['direction'] ?? 'desc');
@@ -64,7 +64,7 @@ final class IsoDomainController extends Controller
 
     public function show(): void
     {
-        Middleware::auth();
+        Middleware::roles(['admin']);
         $domain = $this->domains->find((int) ($_GET['id'] ?? 0));
         if (! $domain) {
             Flash::error('Dominio no encontrado.');

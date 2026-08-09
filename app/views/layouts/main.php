@@ -24,18 +24,24 @@ $scopedOrgId   = Auth::organizationId();
                 <span class="brand-mark">DS</span>
                 <strong>Auditoría BD</strong>
             </div>
+            <?php $rol = $currentUser['role'] ?? null; ?>
             <nav class="nav flex-column gap-1">
                 <a class="nav-link" href="<?= BASE_URL ?>/dashboard">Dashboard</a>
                 <?php if ($scopedOrgId !== null): ?>
                     <a class="nav-link" href="<?= BASE_URL ?>/organizations/show?id=<?= $scopedOrgId ?>">Mi organización</a>
+                    <?php if ($rol === 'auditor'): ?>
+                        <a class="nav-link" href="<?= BASE_URL ?>/users">Mi equipo</a>
+                    <?php endif; ?>
                 <?php else: ?>
                     <a class="nav-link" href="<?= BASE_URL ?>/organizations">Organizaciones</a>
                     <a class="nav-link" href="<?= BASE_URL ?>/users">Usuarios</a>
                 <?php endif; ?>
                 <a class="nav-link" href="<?= BASE_URL ?>/areas">Áreas</a>
-                <a class="nav-link" href="<?= BASE_URL ?>/domains">Dominios ISO</a>
-                <a class="nav-link" href="<?= BASE_URL ?>/controls">Controles</a>
-                <a class="nav-link" href="<?= BASE_URL ?>/questions">Preguntas</a>
+                <?php if ($scopedOrgId === null): ?>
+                    <a class="nav-link" href="<?= BASE_URL ?>/domains">Dominios ISO</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/controls">Controles</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/questions">Preguntas</a>
+                <?php endif; ?>
                 <a class="nav-link" href="<?= BASE_URL ?>/audits">Auditorías</a>
                 <a class="nav-link" href="<?= BASE_URL ?>/recommendations">Recomendaciones</a>
                 <a class="nav-link" href="<?= BASE_URL ?>/comparison">Comparación histórica</a>

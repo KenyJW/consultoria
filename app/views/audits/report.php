@@ -342,8 +342,7 @@ $countAbove3  = count(array_filter($maturities, fn($m) => $m >= 3));
                     <th>Pregunta</th>
                     <th class="text-center" style="width:70px">Respuesta</th>
                     <th class="text-center" style="width:60px">Madurez</th>
-                    <th>Justificación del nivel de madurez</th>
-                    <th>Recomendación</th>
+                    <th>Justificación</th>
                 </tr>
             </thead>
             <tbody>
@@ -356,9 +355,8 @@ $countAbove3  = count(array_filter($maturities, fn($m) => $m >= 3));
                     <tr>
                         <td class="small"><?= e($q['question_text']) ?></td>
                         <td class="text-center small"><?= $ans ? $ansLabels[$ans] : '—' ?></td>
-                        <td class="text-center small"><?= $mat !== null ? (int) $mat . '/5' : '—' ?></td>
+                        <td class="text-center small"><?= $mat !== null ? (int) $mat . '/5' : ($ans === 'na' ? 'N/A' : '—') ?></td>
                         <td class="small"><?= e($q['justification'] ?? '—') ?></td>
-                        <td class="small"><?= e($q['recommendation'] ?? '—') ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>

@@ -30,10 +30,15 @@
                     <label class="form-label" for="role">Rol</label>
                     <select class="form-select" id="role" name="role">
                         <?php $selectedRole = $_SESSION['_old']['role'] ?? $user['role'] ?? 'auditor'; ?>
-                        <option value="admin" <?= $selectedRole === 'admin' ? 'selected' : '' ?>>Administrador</option>
+                        <?php if (! $scoped): ?>
+                            <option value="admin" <?= $selectedRole === 'admin' ? 'selected' : '' ?>>Administrador</option>
+                        <?php endif; ?>
                         <option value="auditor" <?= $selectedRole === 'auditor' ? 'selected' : '' ?>>Auditor</option>
                         <option value="viewer" <?= $selectedRole === 'viewer' ? 'selected' : '' ?>>Consulta</option>
                     </select>
+                    <?php if ($scoped): ?>
+                        <div class="form-text">Queda en su misma organización.</div>
+                    <?php endif; ?>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="status">Estado</label>
@@ -43,6 +48,22 @@
                         <option value="inactive" <?= $selectedStatus === 'inactive' ? 'selected' : '' ?>>Inactivo</option>
                     </select>
                 </div>
+                <?php if (! $scoped): ?>
+                    <div class="col-md-6">
+                        <label class="form-label" for="organization_id">Organización</label>
+                        <?php $selectedOrg = (int) ($_SESSION['_old']['organization_id'] ?? $user['organization_id'] ?? 0); ?>
+                        <select class="form-select" id="organization_id" name="organization_id">
+                            <option value="0" <?= $selectedOrg === 0 ? 'selected' : '' ?>>Sin organización (personal de la consultora)</option>
+                            <?php foreach ($organizations as $organization): ?>
+                                <option value="<?= (int) $organization['id'] ?>" <?= $selectedOrg === (int) $organization['id'] ? 'selected' : '' ?>><?= e($organization['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">
+                            Sin organización = auditor/administrador de la consultora, se puede asignar a cualquier empresa.
+                            Con organización = queda restringido a ver y trabajar solo esa empresa.
+                        </div>
+                    </div>
+                <?php endif; ?>
             </div>
             <div class="d-flex justify-content-end gap-2 mt-4">
                 <a class="btn btn-outline-secondary" href="<?= BASE_URL ?>/users">Cancelar</a>

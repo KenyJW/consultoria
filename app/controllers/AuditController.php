@@ -209,20 +209,32 @@ final class AuditController extends Controller
         }
         Middleware::ownsOrganization((int) $audit['organization_id']);
 
-        $mode            = ($_POST['mode'] ?? 'partial') === 'final' ? 'final' : 'partial';
-        $answers         = (array) ($_POST['answer'] ?? []);
-        $maturityLevels  = (array) ($_POST['maturity_level'] ?? []);
-        $justifications  = (array) ($_POST['justification'] ?? []);
-        $recommendations = (array) ($_POST['recommendation'] ?? []);
+        $mode           = ($_POST['mode'] ?? 'partial') === 'final' ? 'final' : 'partial';
+        $answers        = (array) ($_POST['answer'] ?? []);
+        $maturityLevels = (array) ($_POST['maturity_level'] ?? []);
+        $justifications = (array) ($_POST['justification'] ?? []);
 
-        // Guardar respuesta, nivel de madurez y justificación por pregunta
+        // Guardar respuesta, nivel de madurez y justificación por pregunta.
+        // La madurez SIEMPRE se deriva de la respuesta en el servidor (no se
+        // confía en lo que mande el formulario), para que nunca quede una
+        // combinacion contradictoria como "No" con madurez alta:
+        //   Sí  -> el auditor califica 1-5 (0 no aplica: si existe, ya no es "no existe")
+        //   No  -> madurez fija en 0
+        //   N/A -> sin madurez (se excluye del calculo del control)
         $saved = 0;
         foreach ($answers as $questionId => $answer) {
             $questionId = (int) $questionId;
             $answer     = in_array($answer, ['yes', 'no', 'na'], true) ? $answer : null;
 
-            $maturityRaw   = $maturityLevels[$questionId] ?? '';
-            $maturityLevel = $maturityRaw === '' ? null : max(0, min(5, (int) $maturityRaw));
+            $maturityRaw = $maturityLevels[$questionId] ?? '';
+            $submitted   = $maturityRaw === '' ? null : max(0, min(5, (int) $maturityRaw));
+
+            $maturityLevel = match ($answer) {
+                'no'    => 0,
+                'na'    => null,
+                'yes'   => $submitted === 0 ? null : $submitted,
+                default => $submitted,
+            };
 
             $justification = trim((string) ($justifications[$questionId] ?? ''));
             $justification = $justification !== '' ? mb_substr($justification, 0, 500) : null;
@@ -231,7 +243,6 @@ final class AuditController extends Controller
                 'answer'         => $answer,
                 'maturity_level' => $maturityLevel,
                 'justification'  => $justification,
-                'recommendation' => trim((string) ($recommendations[$questionId] ?? '')) ?: null,
             ]);
             $saved++;
         }
@@ -338,7 +349,7 @@ final class AuditController extends Controller
         $responseId = $this->responses->findId($auditId, $questionId);
         if ($responseId === 0) {
             $responseId = $this->responses->upsert($auditId, $questionId, [
-                'answer' => null, 'maturity_level' => null, 'justification' => null, 'recommendation' => null,
+                'answer' => null, 'maturity_level' => null, 'justification' => null,
             ]);
         }
 
@@ -503,7 +514,6 @@ final class AuditController extends Controller
                 'answer'         => $row['answer'],
                 'maturity_level' => $row['maturity_level'],
                 'justification'  => $row['justification'],
-                'recommendation' => $row['recommendation'],
                 'maturity_scale' => $maturityScales[$questionId] ?? [],
             ];
         }

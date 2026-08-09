@@ -1,6 +1,7 @@
 <?php use App\Core\Csrf; ?>
 <main class="auth-shell">
     <section class="auth-card">
+        <a class="small text-muted text-decoration-none d-inline-block mb-3" href="<?= BASE_URL ?>/">&larr; Volver al inicio</a>
         <div class="d-flex align-items-center gap-3 mb-4">
             <span class="brand-mark">DS</span>
             <div>

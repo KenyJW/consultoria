@@ -1,8 +1,13 @@
 <?php
 use App\Core\MaturityCalculator;
 
-$avgMaturity = (float) ($stats['avg_maturity'] ?? 0);
-$avgRisk     = (float) ($stats['avg_risk'] ?? 0);
+// Para el admin sin empresa seleccionada, el conteo de "auditorias totales"
+// es global (todo el sistema); en cuanto elige una empresa (o si quien mira
+// es la propia empresa), pasa a ser el de esa organizacion especifica.
+$auditCountsSource = $selectedOrgId !== null ? $orgStats : ($globalAuditCounts ?? []);
+$avgMaturity = (float) ($orgStats['avg_maturity'] ?? 0);
+$avgRisk     = (float) ($orgStats['avg_risk'] ?? 0);
+$sinSeleccion = ! $scoped && $selectedOrgId === null;
 ?>
 
 <!-- KPIs -->
@@ -18,11 +23,11 @@ $avgRisk     = (float) ($stats['avg_risk'] ?? 0);
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
-                <div class="text-muted small">Auditorías totales</div>
-                <div class="display-6 fw-bold"><?= (int) ($stats['total'] ?? 0) ?></div>
+                <div class="text-muted small">Auditorías totales<?= $sinSeleccion ? ' (todas las empresas)' : '' ?></div>
+                <div class="display-6 fw-bold"><?= (int) ($auditCountsSource['total'] ?? 0) ?></div>
                 <div class="small text-muted">
-                    <?= (int) ($stats['in_progress'] ?? 0) ?> en progreso &middot;
-                    <?= (int) ($stats['draft'] ?? 0) ?> borrador
+                    <?= (int) ($auditCountsSource['in_progress'] ?? 0) ?> en progreso &middot;
+                    <?= (int) ($auditCountsSource['draft'] ?? 0) ?> borrador
                 </div>
             </div>
         </div>
@@ -31,7 +36,10 @@ $avgRisk     = (float) ($stats['avg_risk'] ?? 0);
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <div class="text-muted small">Madurez promedio</div>
-                <?php if ($avgMaturity > 0): ?>
+                <?php if ($sinSeleccion): ?>
+                    <div class="display-6 fw-bold text-muted">—</div>
+                    <div class="small text-muted">Seleccione una empresa</div>
+                <?php elseif ($avgMaturity > 0): ?>
                     <div class="display-6 fw-bold text-<?= MaturityCalculator::maturityColor($avgMaturity) ?>">
                         <?= number_format($avgMaturity, 2) ?><span class="fs-6 text-muted">/5</span>
                     </div>
@@ -47,7 +55,10 @@ $avgRisk     = (float) ($stats['avg_risk'] ?? 0);
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <div class="text-muted small">Riesgo promedio</div>
-                <?php if ($avgRisk > 0): ?>
+                <?php if ($sinSeleccion): ?>
+                    <div class="display-6 fw-bold text-muted">—</div>
+                    <div class="small text-muted">Seleccione una empresa</div>
+                <?php elseif ($avgRisk > 0): ?>
                     <div class="display-6 fw-bold text-<?= MaturityCalculator::riskColor($avgRisk) ?>">
                         <?= number_format($avgRisk, 1) ?><span class="fs-6 text-muted">%</span>
                     </div>
@@ -60,6 +71,25 @@ $avgRisk     = (float) ($stats['avg_risk'] ?? 0);
         </div>
     </div>
 </div>
+
+<?php if (! $scoped): ?>
+    <form method="get" action="<?= BASE_URL ?>/dashboard" class="row g-2 align-items-end mb-4">
+        <div class="col-md-4">
+            <label class="form-label small mb-1">Ver detalle de una empresa</label>
+            <select class="form-select" name="organization_id" onchange="this.form.submit()">
+                <option value="0">— Seleccione una empresa —</option>
+                <?php foreach ($organizations as $organization): ?>
+                    <option value="<?= (int) $organization['id'] ?>" <?= $selectedOrgId === (int) $organization['id'] ? 'selected' : '' ?>>
+                        <?= e($organization['name']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-md-2 d-grid">
+            <button class="btn btn-outline-primary" type="submit">Ver</button>
+        </div>
+    </form>
+<?php endif; ?>
 
 <!-- KPIs recomendaciones -->
 <?php if (($recCounts['pending'] ?? 0) + ($recCounts['in_progress'] ?? 0) > 0): ?>
@@ -79,7 +109,9 @@ $avgRisk     = (float) ($stats['avg_risk'] ?? 0);
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <h2 class="h6 mb-3">Mapa de calor — Madurez por dominio</h2>
-                <?php if (empty($maturityDomain)): ?>
+                <?php if ($sinSeleccion): ?>
+                    <p class="text-muted small">Seleccione una empresa arriba para ver su mapa de calor.</p>
+                <?php elseif (empty($maturityDomain)): ?>
                     <p class="text-muted small">Sin datos. Complete al menos una auditoría.</p>
                 <?php else: ?>
                     <div class="table-responsive">
@@ -145,7 +177,9 @@ $avgRisk     = (float) ($stats['avg_risk'] ?? 0);
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <h2 class="h6 mb-3">Madurez promedio por dominio</h2>
-                <?php if (empty($maturityDomain)): ?>
+                <?php if ($sinSeleccion): ?>
+                    <p class="text-muted small">Seleccione una empresa arriba para ver su gráfico.</p>
+                <?php elseif (empty($maturityDomain)): ?>
                     <p class="text-muted small">Sin datos disponibles.</p>
                 <?php else: ?>
                     <canvas id="maturityChart" class="fixed-chart" height="220"></canvas>
@@ -159,7 +193,9 @@ $avgRisk     = (float) ($stats['avg_risk'] ?? 0);
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
         <h2 class="h6 mb-3">Últimas auditorías cerradas</h2>
-        <?php if (empty($recentClosed)): ?>
+        <?php if ($sinSeleccion): ?>
+            <p class="text-muted small">Seleccione una empresa arriba para ver sus auditorías recientes.</p>
+        <?php elseif (empty($recentClosed)): ?>
             <p class="text-muted small">No hay auditorías cerradas con resultados calculados.</p>
         <?php else: ?>
             <div class="table-responsive">
